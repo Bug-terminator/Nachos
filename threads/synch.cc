@@ -100,7 +100,12 @@ void Semaphore::V()
 // Note -- without a correct implementation of Condition::Wait(),
 // the test case in the network assignment won't work!
 
-//lab3 实现lock
+
+//----------------------------------------------------------------------
+// Lab3 Lock
+// Check my report for more information
+//----------------------------------------------------------------------
+
 Lock::Lock(char *debugName)
 {
     name = debugName;
@@ -141,7 +146,14 @@ bool Lock::isLocked()
     return !semaphore->getValue();
 }
 
-//lab3 环境变量
+
+
+
+
+//----------------------------------------------------------------------
+// Lab3 Condition
+// Check my report for more information
+//----------------------------------------------------------------------
 Condition::Condition(char *debugName)
 {
     name = debugName;
@@ -174,13 +186,13 @@ void Condition::Signal(Lock *conditionLock)
 {
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     //环境变量的所有者必须为当前线程
-    ASSERT(conditionLock->isHeldByCurrentThread())
+    ASSERT(conditionLock->isHeldByCurrentThread());
     //唤醒进程
     if (!queue->IsEmpty())
     {
         Thread *thread = (Thread *)queue->Remove();
         scheduler->ReadyToRun(thread);
-        DEBUG('c', "%s wakes up %s.", getName(), thread->getName());
+        DEBUG('c', "%s wakes up \"%s\".\n", getName(), thread->getName());
     }
     interrupt->SetLevel(oldLevel);
 }
@@ -189,7 +201,7 @@ void Condition::Broadcast(Lock *conditionLock)
 {
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     //环境变量的所有者必须为当前线程
-    ASSERT(conditionLock->isHeldByCurrentThread())
+    ASSERT(conditionLock->isHeldByCurrentThread());
     DEBUG('c', "broadcast : ");
     //唤醒所有进程
     while (!queue->IsEmpty())
@@ -202,7 +214,13 @@ void Condition::Broadcast(Lock *conditionLock)
     interrupt->SetLevel(oldLevel);
 }
 
-//lab3 challenge barrier
+
+
+
+//----------------------------------------------------------------------
+// Lab3 Barrier
+// Check my report for more information
+//----------------------------------------------------------------------
 Barrier::Barrier(char *debugName, int num)
 {
     threadNum = num;
@@ -227,12 +245,10 @@ void Barrier::stopAndWait()
     if (!remain)
     {
         DEBUG('b', "All threads reached %s.\n", name);
-        condition->Broadcast(mutex);
+        condition->Broadcast(mutex);//释放前n-1个线程
         //重置barrier
         remain = threadNum;
-        // DEBUG('b', "%s", currentThread->getName());//补充broadcast
-
-        currentThread->Yield();
+        currentThread->Yield();//最后一个线程不能用wait，否则会导致所有线程阻塞，因此，用yeild()
 
     }
     else
