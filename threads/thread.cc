@@ -43,7 +43,7 @@ Thread::Thread(char *threadname)
     space = NULL;
 #endif
 }
-
+#ifdef LAB1
 //lab1 实现优先级抢占调度算法和时间片轮转算法
 Thread::Thread(char *threadName, int pr)
 {
@@ -73,7 +73,7 @@ Thread::Thread(char *threadName, int pr)
     space = NULL;
 #endif
 }
-
+#endif
 //----------------------------------------------------------------------
 // Thread::~Thread
 // 	De-allocate a thread.
@@ -89,11 +89,12 @@ Thread::Thread(char *threadName, int pr)
 Thread::~Thread()
 {
     DEBUG('t', "Deleting thread \"%s\"\n", name);
-
+#ifdef LAB1
     threadPtr[tID] = NULL;
     isAllocatable[tID] = true;
     threadCount--;
     // cout << "thread " << getTID() << " has been deleted by thread " << currentThread->getTID() << endl;
+    #endif
     ASSERT(this != currentThread);
     if (stack != NULL)
         DeallocBoundedArray((char *)stack, StackSize * sizeof(int));
@@ -218,6 +219,8 @@ void Thread::Yield()
     {
         scheduler->ReadyToRun(this);
         // cout << "System has switched thread " << currentThread->getTID() << " to thread " << nextThread->getTID() << endl;
+        // scheduler->Print();//lab3 barrier debug usage
+
         scheduler->Run(nextThread);
     }
     (void)interrupt->SetLevel(oldLevel);

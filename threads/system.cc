@@ -180,7 +180,7 @@ void Initialize(int argc, char **argv)
     // We didn't explicitly allocate the current thread we are running in.
     // But if it ever tries to give up the CPU, we better have a Thread
     // object to save its state.
-    currentThread = new Thread("main", 7);
+    currentThread = new Thread("main");
     currentThread->setStatus(RUNNING);
 
     interrupt->Enable();

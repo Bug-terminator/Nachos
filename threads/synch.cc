@@ -159,7 +159,7 @@ void Condition::Wait(Lock *conditionLock)
     conditionLock->Release(); //已经断言锁已经上锁和所有者为当前线程
 
     //放弃cpu，并加入等待队列
-    DEBUG('c', "%s has blocked %s.", getName(), currentThread->getName()); //c means condition
+    DEBUG('c', "%s has blocked thread \"%s\".\n", getName(), currentThread->getName()); //c means condition
     queue->Append(currentThread);
     currentThread->Sleep();
 
@@ -190,14 +190,15 @@ void Condition::Broadcast(Lock *conditionLock)
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     //环境变量的所有者必须为当前线程
     ASSERT(conditionLock->isHeldByCurrentThread())
-    DEBUG('c', "%s broadcast :\n ", getName());
+    DEBUG('c', "broadcast : ");
     //唤醒所有进程
     while (!queue->IsEmpty())
     {
         Thread *thread = (Thread *)queue->Remove();
         scheduler->ReadyToRun(thread);
-        DEBUG('c', "%s wakes up.\t", thread->getName());
+        DEBUG('c', "%s\t", thread->getName());
     }
+    DEBUG('c', "\n");
     interrupt->SetLevel(oldLevel);
 }
 
@@ -222,16 +223,20 @@ void Barrier::stopAndWait()
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     mutex->Acquire(); //condition->wait(mutex)必须在锁已经锁定的情况下使用
     remain--;
-    DEBUG('b', "%s reached %s with remain = %d.\n", currentThread->getName(), name, remain); //b means barrier
+    DEBUG('b', "Thread \"%s\" reached %s with remain = %d.\n", currentThread->getName(), name, remain); //b means barrier
     if (!remain)
     {
         DEBUG('b', "All threads reached %s.\n", name);
         condition->Broadcast(mutex);
         //重置barrier
         remain = threadNum;
+        // DEBUG('b', "%s", currentThread->getName());//补充broadcast
+
+        currentThread->Yield();
+
     }
     else
-        condition->Wait(mutex);
+    condition->Wait(mutex);//阻塞当前线程
     mutex->Release();
     interrupt->SetLevel(oldLevel);
 }
