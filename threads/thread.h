@@ -92,7 +92,7 @@ class Thread {
 
     // basic thread operations
 
-    void Fork(VoidFunctionPtr func, int arg);
+    void Fork(VoidFunctionPtr func, int arg);//lab2 多线程 将参数arg从int改为char*
      	// Make thread run (*func)(arg)
     void Yield();  				// Relinquish the CPU if any 
 						// other thread is runnable

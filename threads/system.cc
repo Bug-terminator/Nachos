@@ -72,16 +72,21 @@ TimerInterruptHandler(int dummy)
 {
     if (interrupt->getStatus() != IdleMode)
     {
+#ifdef ROUND_ROBIN//时间片轮转
+
         currentThread->totalRunningTime--;
         currentThread->timeSlice--;
-        if(currentThread->totalRunningTime>=0)
-        cout << "A time interrupt occered, current time = " << stats->totalTicks << " ,thread " << currentThread->getTID() << " has runned " << 10 - currentThread->totalRunningTime << " unit time."<< endl;
-
-        if (!currentThread->timeSlice)
-        {
-            currentThread->timeSlice = 5;//重新获取时间片，并加入就绪队列
-            interrupt->YieldOnReturn();
-        }
+        if (currentThread->totalRunningTime >= 0)
+            // cout << "A time interrupt occered, current time = " << stats->totalTicks << " ,thread " << currentThread->getTID() << " has runned " << 10 - currentThread->totalRunningTime << " unit time."<< endl;
+            // DEBUG("t" ,)
+            if (!currentThread->timeSlice)
+            {
+                currentThread->timeSlice = 5; //重新获取时间片，并加入就绪队列
+                interrupt->YieldOnReturn();
+            }
+#else//原始版本
+        interrupt->YieldOnReturn();
+#endif
     }
 }
 
@@ -167,7 +172,7 @@ void Initialize(int argc, char **argv)
     stats = new Statistics();    // collect statistics
     interrupt = new Interrupt;   // start up interrupt handling
     scheduler = new Scheduler(); // initialize the ready queue
-    // if (randomYield)             // start the timer (if needed)
+    if (randomYield)             // start the timer (if needed)//lab3 不使用时间片轮转
     timer = new Timer(TimerInterruptHandler, 0, randomYield);
 
     threadToBeDestroyed = NULL;

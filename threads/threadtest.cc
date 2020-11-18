@@ -11,6 +11,7 @@
 
 #include "copyright.h"
 #include "system.h"
+#include "synch.h"
 
 // testnum is set in main.cc
 int testnum = 1;
@@ -134,6 +135,79 @@ void timeSlicingTest()
         t->Fork(mySimlpe2, 1);
     mySimlpe2(1);
 }
+
+
+
+/* lab3 challenge 实现barrier
+new 4 个线程，分别对4个全局变量
+进行赋值，然后再main中计算它们的
+和，共分三个阶段，每个阶段计算一次和 
+测试使用random seed随机时间片*/
+#define THREADNUM 4
+int num[THREADNUM];
+Barrier *barrier;
+//为每个变量赋值，变量与线程一一对应
+void assignValue(int i)
+{
+    
+    //第一阶段
+    num[i] = 1;
+    printf("First stage : %s finished assignment, num[%d] = %d.\n", currentThread->getName(), i, i);
+    // currentThread->Yield(); //启用random seed需要注释此句, -rs
+    barrier->stopAndWait();
+    //第二阶段；
+    num[i] = 2;
+    printf("Second stage : %s finished assignment, num[%d] = %d.\n", currentThread->getName(), i, i);
+    // currentThread->Yield();
+    barrier->stopAndWait();
+    //第三阶段
+    num[i] = 3;
+    printf("Third stage : %s finished assignment, num[%d] = %d.\n", currentThread->getName(),i ,i);
+    // currentThread->Yield();
+    barrier->stopAndWait();
+}
+
+void Lab3Barrier()
+{
+    barrier = new Barrier("barrier", THREADNUM+1);//main也需要算进去
+    Thread *threads[THREADNUM];
+    //初始化线程和数组,并加入就绪队列
+    for (int i = 0; i < THREADNUM; ++i)
+    {
+        num[i] = 0;
+        char threadName[30];
+        sprintf(threadName,"Barrier test %d", i);//给线程命名
+        threads[i] = new Thread(strdup(threadName));
+        threads[i]->Fork(assignValue, i);
+    }
+    //初始信息,以下代码可以用一个for循环改写，但是这个框架更易于改写成各个阶段不同的计算（todo），所以保留
+    printf("Main is running.\n");
+    printf("Default stage : sum = %d\n", num[0]+num[1]+num[2]+num[3]);
+    // currentThread->Yield();
+    barrier->stopAndWait();
+    
+    //第一阶段
+    printf("Main is running.\n");
+    printf("First stage : sum = %d\n", num[0]+num[1]+num[2]+num[3]);
+    // currentThread->Yield();
+    barrier->stopAndWait();
+    
+    //第二阶段
+    printf("Main is running.\n");
+    printf("Second stage : sum = %d\n", num[0]+num[1]+num[2]+num[3]);
+    // currentThread->Yield();
+    barrier->stopAndWait();
+
+    //第三阶段
+    printf("Main is running.\n");
+    printf("Third stage : sum = %d\n", num[0]+num[1]+num[2]+num[3]);
+    // currentThread->Yield();
+    barrier->stopAndWait();
+
+    //结束
+    printf("Barrier test Finished.\n");
+
+}
 //----------------------------------------------------------------------
 // ThreadTest
 // 	Invoke a test routine.
@@ -154,6 +228,9 @@ void ThreadTest()
         break;
     case 4:
         timeSlicingTest();
+        break;
+    case 5:
+        Lab3Barrier();
         break;
     default:
         printf("No test specified.\n");

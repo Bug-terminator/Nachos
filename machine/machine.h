@@ -78,6 +78,19 @@ enum ExceptionType { NoException,           // Everything ok!
 //	    registers to act on
 //	    any immediate operand value
 
+// lab2 实现自己的bitMap
+class bitMap
+{
+	public:
+	int findZeroBit();
+	void setBit(int index, bool zeroOrOne);
+	int allocateMem();//分配内存
+	void freeMem();//回收内存
+	void printBitMap();//打印bitMap信息
+	private:
+	unsigned int bitmap;
+};
+
 class Instruction {
   public:
     void Decode();	// decode the binary representation of the instruction
@@ -106,6 +119,8 @@ class Instruction {
 
 class Machine {
   public:
+	
+
     Machine(bool debug);	// Initialize the simulation of the hardware
 				// for running user programs
     ~Machine();			// De-allocate the data structures
@@ -178,9 +193,14 @@ class Machine {
 
     TranslationEntry *tlb;		// this pointer should be considered 
 					// "read-only" to Nachos kernel code
-
     TranslationEntry *pageTable;
     unsigned int pageTableSize;
+
+	//lab 2 tlb miss rate
+	unsigned int tlbVisitCnt, tlbHitCnt;
+    void PrintTLBStatus(void);
+	//lab 2 bitMap
+	bitMap *bitmap;
 
   private:
     bool singleStep;		// drop back into the debugger after each

@@ -189,6 +189,7 @@ bool Machine::WriteMem(int addr, int size, int value)
 ExceptionType
 Machine::Translate(int virtAddr, int *physAddr, int size, bool writing)
 {
+	tlbVisitCnt++;
 	int i;
 	unsigned int vpn, offset;
 	TranslationEntry *entry;
@@ -204,8 +205,8 @@ Machine::Translate(int virtAddr, int *physAddr, int size, bool writing)
 	}
 
 	// we must have either a TLB or a page table, but not both!
-	ASSERT(tlb == NULL || pageTable == NULL);
-	ASSERT(tlb != NULL || pageTable != NULL);
+	// ASSERT(tlb == NULL || pageTable == NULL);
+	// ASSERT(tlb != NULL || pageTable != NULL);
 
 	// calculate the virtual page number, and offset within the page,
 	// from the virtual address
@@ -233,12 +234,9 @@ Machine::Translate(int virtAddr, int *physAddr, int size, bool writing)
 		for (entry = NULL, i = 0; i < TLBSize; i++)
 			if (tlb[i].valid && (tlb[i].virtualPage == vpn))
 			{
+				tlbHitCnt++;
+				tlb[i].lastVisitedTime = stats->totalTicks;//如果命中，更新tlb的lastVisitedTime值
 				entry = &tlb[i]; // FOUND!
-				//将i之前的元素向后移，i放在头部
-				TranslationEntry temp = tlb[i];
-				
-				for(int j = 0; j<i;++j)
-				
 				break;
 			}
 		if (entry == NULL)

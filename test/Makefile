@@ -35,7 +35,7 @@ CPP = gcc -E
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt shell matmult sort
+all: halt shell matmult sort 99table
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.c > strt.s
@@ -65,3 +65,11 @@ matmult.o: matmult.c
 matmult: matmult.o start.o
 	$(LD) $(LDFLAGS) start.o matmult.o -o matmult.coff
 	../bin/coff2noff matmult.coff matmult
+
+
+# For Lab2: Test the TLB Hit Rate
+99table.o: 99table.c
+	$(CC) $(CFLAGS) -c 99table.c
+99table: 99table.o start.o
+	$(LD) $(LDFLAGS) start.o 99table.o -o 99table.coff
+	../bin/coff2noff 99table.coff 99table

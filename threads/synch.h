@@ -44,7 +44,7 @@ class Semaphore {
     
     void P();	 // these are the only operations on a semaphore
     void V();	 // they are both *atomic*
-    
+    int getValue() { return value; } //lab3 get the value (for Lock::isLocked())
   private:
     char* name;        // useful for debugging
     int value;         // semaphore value, always >= 0
@@ -76,9 +76,12 @@ class Lock {
 					// holds this lock.  Useful for
 					// checking in Release, and in
 					// Condition variable ops below.
+    bool isLocked();//lab3 检查锁是否已经上锁，在condition::wait()中使用
 
   private:
     char* name;				// for debugging
+    Thread* heldThread; //lab3 在isHeldByCurrentThread()使用
+    Semaphore *semaphore; //信号量
     // plus some other stuff you'll need to define
 };
 
@@ -131,6 +134,27 @@ class Condition {
 
   private:
     char* name;
+    List *queue;
     // plus some other stuff you'll need to define
+};
+
+
+
+// Lab3: Challenge Barrier
+
+class Barrier {
+  public:
+    Barrier(char* debugName, int num); // initialize barrier
+    ~Barrier(); // deallocate the barrier
+    char* getName() { return (name); } // debugging assist
+
+    void stopAndWait(); // Sleep the Thread until all the Threads arrived
+
+  private:
+    char* name;             // useful for debugging
+    int remain;             // How many Threads have not arrived
+    int threadNum;        // Total Threads
+    Lock* mutex;            // Lock for "remain"
+    Condition* condition;   // Used to sleep the Thread and wake them up
 };
 #endif // SYNCH_H

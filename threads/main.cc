@@ -61,7 +61,7 @@ extern int testnum;
 
 extern void ThreadTest(void), Copy(char *unixFile, char *nachosFile);
 extern void Print(char *file), PerformanceTest(void);
-extern void StartProcess(char *file), ConsoleTest(char *in, char *out);
+extern void StartProcess(char *file), ConsoleTest(char *in, char *out), startMultiProcess(char *filename);//lab2 多线程
 extern void MailTest(int networkID);
 
 //----------------------------------------------------------------------
@@ -110,6 +110,7 @@ main(int argc, char **argv)
 #ifdef USER_PROGRAM
         if (!strcmp(*argv, "-x")) {        	// run a user program
 	    ASSERT(argc > 1);
+			// startMultiProcess(*(argv + 1));//lab2 实现多线程
             StartProcess(*(argv + 1));
             argCount = 2;
         } else if (!strcmp(*argv, "-c")) {      // test the console

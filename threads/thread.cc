@@ -43,6 +43,8 @@ Thread::Thread(char *threadname)
     space = NULL;
 #endif
 }
+
+//lab1 实现优先级抢占调度算法和时间片轮转算法
 Thread::Thread(char *threadName, int pr)
 {
     timeSlice = 5; totalRunningTime = 10;
@@ -59,7 +61,7 @@ Thread::Thread(char *threadName, int pr)
             threadPtr[i] = this;
             threadCount++;
             if (currentThread)
-                cout << "thread " << currentThread->getTID() << " created a new thread, tID = " << tID << " ,prio = " << prio << endl;
+                // cout << "thread " << currentThread->getTID() << " created a new thread, tID = " << tID << " ,prio = " << prio << endl;
             break;
         }
     }
@@ -91,7 +93,7 @@ Thread::~Thread()
     threadPtr[tID] = NULL;
     isAllocatable[tID] = true;
     threadCount--;
-    cout << "thread " << getTID() << " has been deleted by thread " << currentThread->getTID() << endl;
+    // cout << "thread " << getTID() << " has been deleted by thread " << currentThread->getTID() << endl;
     ASSERT(this != currentThread);
     if (stack != NULL)
         DeallocBoundedArray((char *)stack, StackSize * sizeof(int));
@@ -117,6 +119,7 @@ Thread::~Thread()
 //	"arg" is a single argument to be passed to the procedure.
 //----------------------------------------------------------------------
 
+//lab2 多线程 将参数arg的类型从int改为char *， 又改了回来
 void Thread::Fork(VoidFunctionPtr func, int arg)
 {
     DEBUG('t', "Forking thread \"%s\" with func = 0x%x, arg = %d\n",
@@ -214,7 +217,7 @@ void Thread::Yield()
     if (nextThread != NULL)
     {
         scheduler->ReadyToRun(this);
-        cout << "System has switched thread " << currentThread->getTID() << " to thread " << nextThread->getTID() << endl;
+        // cout << "System has switched thread " << currentThread->getTID() << " to thread " << nextThread->getTID() << endl;
         scheduler->Run(nextThread);
     }
     (void)interrupt->SetLevel(oldLevel);
