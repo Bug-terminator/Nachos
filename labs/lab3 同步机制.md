@@ -4,13 +4,13 @@
 
 ## 任务完成情况
 
-| Exercises  | Y/N  |
-| ---------- | ---- |
-| Exercise   | Y    |
-| Exercise   | Y    |
-| Exercise   | Y    |
-| Exercise   | Y    |
-| *challenge | Y    |
+|  Exercises  | Y/N  |
+| :---------: | :--: |
+|  Exercise1  |  Y   |
+|  Exercise2  |  Y   |
+|  Exercise3  |  Y   |
+|  Exercise4  |  Y   |
+| *challenge1 |  Y   |
 
 ## Exercise1 调研
 
@@ -32,7 +32,7 @@
 
 ### 结论
 
-Linux在内核中实现了很多种类不同的锁，通常情况下用于系统软件和硬件的管理。而对于用户级进程，据我所知一般是使用[ptherads库](https://github.com/GerHobbelt/pthread-win32)。
+Linux在内核中实现了很多种类不同的锁，通常情况下用于系统软件和硬件的管理。而对于用户级进程，据我所知一般是使用[ptherad库](https://github.com/GerHobbelt/pthread-win32)。
 
 ## Exercise2 源代码阅读
 
@@ -69,3 +69,450 @@ Linux在内核中实现了很多种类不同的锁，通常情况下用于系统
 
   - [Condition Variables](https://computing.llnl.gov/tutorials/pthreads/#ConditionVariables)
 
+#### Lock
+
+Nachos已经有了一个Lock模板，我用semaphore来实现它。
+
+我添加了两个private变量：
+
+```cpp
+class Lock {
+  ...
+  private:
+    ...
+  Thread *heldThread;   //lab3 在isHeldByCurrentThread()使用
+  Semaphore *semaphore; //信号量,在构造函数中将value初始化为1
+};
+```
+
+当currentThread获得Lock的时候将heldThread指定为currentThread：
+
+```cpp
+void Lock::Acquire()
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);//关中断
+    semaphore->P();
+    heldThread = currentThread;
+    DEBUG('l', "%s has aquired %s", heldThread->getName(), name); //l means lock
+    interrupt->SetLevel(oldLevel);
+}
+```
+
+当且仅当锁的拥有者为currentTHread才可以释放锁。
+
+更多的细节请查看`code/thread/synch.cc`
+
+#### Condition
+
+Nachos已经给了Condition的模板，我用Lock来实现它。
+
+我添加了一个private成员变量queue作为阻塞队列。
+
+```
+class Condition {
+  private:
+    List* queue; // 因某条件被阻塞的线程
+};
+```
+
+注意到所有的Condition成员函数都需要一个参数conditionlock，这是因为使用条件变量的线程必须在之前就已经获得了锁。
+
+用sigenal来唤醒单个线程，broadcast来唤醒多个线程：
+
+```cpp
+void Condition::Signal(Lock *conditionLock)
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //环境变量的所有者必须为当前线程
+    ASSERT(conditionLock->isHeldByCurrentThread());
+    //唤醒进程
+    if (!queue->IsEmpty())
+    {
+        Thread *thread = (Thread *)queue->Remove();
+        scheduler->ReadyToRun(thread);
+        DEBUG('c', "%s wakes up \"%s\".\n", getName(), thread->getName());
+    }
+    interrupt->SetLevel(oldLevel);
+}
+```
+
+```cpp
+void Condition::Broadcast(Lock *conditionLock)
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //环境变量的所有者必须为当前线程
+    ASSERT(conditionLock->isHeldByCurrentThread());
+    DEBUG('c', "broadcast : ");
+    //唤醒所有进程
+    while (!queue->IsEmpty())
+    {
+        Thread *thread = (Thread *)queue->Remove();
+        scheduler->ReadyToRun(thread);
+        DEBUG('c', "%s\t", thread->getName());
+    }
+    DEBUG('c', "\n");
+    interrupt->SetLevel(oldLevel);
+}
+```
+
+关于wait()的实现请查看`code/thread/synch.cc`
+
+#### 测试
+
+我将在exercise中进行Lock和Condition的测试。
+
+## Exercise4 生产者消费者
+
+> 基于Nachos中的信号量、锁和条件变量，采用两种方式实现同步和互斥机制应用（其中使用条件变量实现同步互斥机制为必选题目）。具体可选择“生产者-消费者问题”、“读者-写者问题”、“哲学家就餐问题”、“睡眠理发师问题”等。（也可选择其他经典的同步互斥问题）
+
+这里我选择实现生产者消费者问题，并使用Lock和Condition实现。代码框架可以参考：
+
+> [生产者消费者--wiki百科](https://zh.wikipedia.org/wiki/%E7%94%9F%E4%BA%A7%E8%80%85%E6%B6%88%E8%B4%B9%E8%80%85%E9%97%AE%E9%A2%98)
+
+### 实现
+
+```cpp
+//----------------------------------------------------------------------
+// Lab3 Exercise4 生产者消费者问题
+// 在main中new一个生产者和一个消费者
+// 消费者：每次从buffer中取一个元素
+// 生产者：每次生产一个元素放入buffer
+// buff满,生产者阻塞，buff空，消费者阻塞
+// 保证生产者和消费者互斥访问buffer
+//----------------------------------------------------------------------
+
+#define BUFFER_SIZE 5                  //buffer的大小
+#define THREADNUM_P (Random() % 4 + 1) //生产者数,不超过4
+#define THREADNUM_C (Random() % 4 + 1) //消费者数,不超过4
+#define TESTTIME 1500                  //本次测试的总时间
+
+vector<char> buffer;     //方便起见，用STL作为buffer
+Lock *mutex;             //mutex->缓冲区的互斥访问
+Condition *full, *empty; //full->生产者的条件变量，empty->消费者的条件变量
+
+//消费者线程
+void comsumer(int dummy)
+{
+    while (stats->totalTicks < TESTTIME) //约等于while(true),这样写可以在有限的时间内结束
+    {
+        //保证对缓冲区的互斥访问
+        mutex->Acquire();
+        //缓冲区孔，阻塞当前消费者
+        if (!buffer.size())
+        {
+            printf("Buffer is empty with size %d.\n", buffer.size());
+            empty->Wait(mutex);
+        }
+
+        //消费一个缓冲区物品
+        ASSERT(buffer.size());
+        buffer.pop_back();
+        printf("Thread \"%s\" gets an item.\n", currentThread->getName());
+
+        //若存在阻塞的生产者，将他们中的一个释放
+        if (buffer.size() == BUFFER_SIZE - 1)
+            full->Signal(mutex);
+
+        //释放锁
+        mutex->Release();
+        interrupt->OneTick(); //系统时间自增
+    }
+}
+
+//生产者线程
+void producer(int dummy)
+{
+    while (stats->totalTicks < TESTTIME) //约等于while(true),这样写可以在有限的时间内结束
+    {
+        //保证对缓冲区的互斥访问
+        mutex->Acquire();
+
+        //缓冲区满，阻塞当前线程
+        if (buffer.size() == BUFFER_SIZE)
+        {
+            printf("Buffer is full with size %d.\n", buffer.size());
+            full->Wait(mutex);
+        }
+
+        //生产一个物品放入缓冲区
+        ASSERT(buffer.size() < BUFFER_SIZE);
+        buffer.push_back('0');
+        printf("Thread \"%s\" puts an item.\n", currentThread->getName());
+
+        //若存在阻塞的消费者，将他们中的一个释放
+        if (buffer.size() == 1)
+            empty->Signal(mutex);
+
+        //释放锁
+        mutex->Release();
+        interrupt->OneTick(); //系统时间自增
+    }
+}
+
+void Lab3ProducerAndComsumer()
+{
+    printf("Random created %d comsumers, %d producers.\n", THREADNUM_C, THREADNUM_P);
+		
+    full = new Condition("Full_condition");//初始化full
+    empty = new Condition("Empty_condition");//初始化empty
+    mutex = new Lock("buffer_mutex");//初始化mutex
+
+    Thread *threadComsumer[THREADNUM_C];
+    Thread *threadProducer[THREADNUM_P];
+
+    //初始化消费者
+    for (int i = 0; i < THREADNUM_C; ++i)
+    {
+        char threadName[20];
+        sprintf(threadName, "Comsumer %d", i); //给线程命名
+        threadComsumer[i] = new Thread(strdup(threadName));
+        threadComsumer[i]->Fork(comsumer, 0);
+    }
+    //初始化生产者
+    for (int i = 0; i < THREADNUM_P; ++i)
+    {
+        char threadName[20];
+        sprintf(threadName, "Producer %d", i); //给线程命名
+        threadProducer[i] = new Thread(strdup(threadName));
+        threadProducer[i]->Fork(producer, 0);
+    }   
+  
+    while (!scheduler->isEmpty())
+        currentThread->Yield(); //跳过main的执行
+
+    //结束
+    printf("Producer consumer test Finished.\n");
+}
+
+```
+
+在terminal中输入`./nachos -d c -q 6`可查看结果：
+
+> c means condition
+
+```shell
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ ./nachos -d c -q 6
+Random created 3 comsumers, 4 producers.
+Buffer is empty with size 0.
+Empty_condition has blocked thread "Comsumer 0".
+Buffer is empty with size 0.
+Empty_condition has blocked thread "Comsumer 1".
+Buffer is empty with size 0.
+Empty_condition has blocked thread "Comsumer 2".
+Thread "Producer 0" puts an item.
+Empty_condition wakes up "Comsumer 0".
+Thread "Producer 0" puts an item.
+Thread "Producer 0" puts an item.
+Thread "Producer 0" puts an item.
+Thread "Producer 0" puts an item.
+Buffer is full with size 5.
+Full_condition has blocked thread "Producer 0".
+Buffer is full with size 5.
+Full_condition has blocked thread "Producer 1".
+Buffer is full with size 5.
+Full_condition has blocked thread "Producer 2".
+Buffer is full with size 5.
+Full_condition has blocked thread "Producer 3".
+Thread "Comsumer 0" gets an item.
+Full_condition wakes up "Producer 0".
+Thread "Comsumer 0" gets an item.
+Thread "Comsumer 0" gets an item.
+Thread "Comsumer 0" gets an item.
+Thread "Comsumer 0" gets an item.
+Buffer is empty with size 0.
+Empty_condition has blocked thread "Comsumer 0".
+Thread "Producer 0" puts an item.
+Empty_condition wakes up "Comsumer 1".
+Thread "Producer 0" puts an item.
+Thread "Producer 0" puts an item.
+Thread "Producer 0" puts an item.
+Thread "Producer 0" puts an item.
+Buffer is full with size 5.
+Full_condition has blocked thread "Producer 0".
+Thread "Comsumer 1" gets an item.
+Full_condition wakes up "Producer 1".
+Thread "Comsumer 1" gets an item.
+Thread "Comsumer 1" gets an item.
+Thread "Comsumer 1" gets an item.
+Thread "Comsumer 1" gets an item.
+Buffer is empty with size 0.
+Empty_condition has blocked thread "Comsumer 1".
+Thread "Producer 1" puts an item.
+Empty_condition wakes up "Comsumer 2".
+Thread "Producer 1" puts an item.
+Thread "Producer 1" puts an item.
+Thread "Producer 1" puts an item.
+Thread "Producer 1" puts an item.
+Buffer is full with size 5.
+Full_condition has blocked thread "Producer 1".
+Thread "Comsumer 2" gets an item.
+Full_condition wakes up "Producer 2".
+Thread "Comsumer 2" gets an item.
+Thread "Comsumer 2" gets an item.
+Thread "Comsumer 2" gets an item.
+Thread "Comsumer 2" gets an item.
+Buffer is empty with size 0.
+Empty_condition has blocked thread "Comsumer 2".
+Thread "Producer 2" puts an item.
+Empty_condition wakes up "Comsumer 0".
+Thread "Producer 2" puts an item.
+Thread "Producer 2" puts an item.
+Thread "Producer 2" puts an item.
+Thread "Producer 2" puts an item.
+Buffer is full with size 5.
+Full_condition has blocked thread "Producer 2".
+Thread "Comsumer 0" gets an item.
+Full_condition wakes up "Producer 3".
+Thread "Producer 3" puts an item.
+Producer consumer test Finished.
+No threads ready or runnable, and no pending interrupts.
+Assuming the program completed.
+Machine halting!
+
+Ticks: total 1560, idle 0, system 1560, user 0
+Disk I/O: reads 0, writes 0
+Console I/O: reads 0, writes 0
+Paging: faults 0
+Network I/O: packets received 0, sent 0
+
+Cleaning up...
+```
+
+### 结论
+
+结果显示，成功实现了多生产者消费者对于buffer的互斥访问，并使用了semaphore和condition，满足题目要求。
+
+## *challenge Barrier 
+
+> 可以使用Nachos 提供的同步互斥机制（如条件变量）来实现barrier，使得当且仅当若干个线程同时到达某一点时方可继续执行。
+
+### 背景知识
+
+- [Wiki - Barrier (computer science)](https://en.wikipedia.org/wiki/Barrier_(computer_science))
+- [Latches And Barriers](http://www.modernescpp.com/index.php/latches-and-barriers)
+
+我仿造了`std::barrier`的`arrive_and_wait`的实现，并在`code/thread/synch.h`中添加了Barrier类：
+
+```cpp
+class Barrier
+{
+public:
+  Barrier(char *debugName, int num); // 构造函数
+  ~Barrier();                        // 析构函数
+  char *getName() { return (name); } // 调试用
+
+  void stopAndWait(); // 在所有线程到达之前阻塞当前线程
+
+private:
+  char *name;           // 调试用
+  int remain;           // 还剩多少线程没到？
+  int threadNum;        // 线程总数
+  Lock *mutex;          // condition中使用的锁
+  Condition *condition; // 用来阻塞线程并唤醒他们
+};
+```
+
+具体的实现请查看`code/thread/synch.cc`
+
+在`code/thread/threadtest.cc`中编写了`Lab3Barrier()`函数，`testnum = 5`：
+
+```cpp
+//----------------------------------------------------------------------
+// lab3 challenge1 barrier
+// 在main中new 4 个线程，四个线程分别对4个全局变量进行赋值
+// 共分三个阶段,每个阶段赋值不同，但是在相同的阶段中，
+// 每个线程对对应元素赋值是相同的，本程序可用于barrier测试
+//----------------------------------------------------------------------
+
+#define THREADNUM 4//线程数
+#define PHASENUM 3//测试的阶段数
+int num[THREADNUM];//4个全局变量
+Barrier *barrier;
+
+//为每个变量赋值，变量与线程一一对应
+void assignValue(int i)//i代表数组下标
+{
+  //每个循环代表一个阶段
+    for (int j = 1; j <= PHASENUM; ++j)
+    {
+        num[i] = j;//简单起见，赋值与阶段数相等
+        printf("Phase %d: thread \"%s\" finished assignment, num[%d] = %d.\n",j, currentThread->getName(), i, j);
+        barrier->stopAndWait();//线程暂时被barrier阻塞，并等待所有线程抵达
+    }
+}
+
+void Lab3Barrier()
+{
+
+    barrier = new Barrier("barrier", THREADNUM);//初始化barrier
+    Thread *threads[THREADNUM];//构造线程数组
+    //初始化线程和数组,并加入就绪队列
+    for (int i = 0; i < THREADNUM; ++i)
+    {
+        num[i] = 0;
+        char threadName[30];
+        sprintf(threadName, "Barrier test %d", i + 1); //给线程命名
+        threads[i] = new Thread(strdup(threadName));
+        threads[i]->Fork(assignValue, i);
+    }
+    while (!scheduler->isEmpty())
+        currentThread->Yield(); //跳过main的执行
+    //结束
+    printf("Barrier test Finished.\n");
+}
+```
+
+预期结果：每个阶段中，数组num中的每个元素相等。
+
+### 测试
+
+在`terminal`中输入`./nachos -d b -q 5`可查看结果：
+
+> b代表barrier
+
+```shell
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ ./nachos -d b -q 5
+Phase 1: thread "Barrier test 0" finished assignment, num[0] = 1.
+Thread "Barrier test 0" reached barrier with remain = 3.
+Phase 1: thread "Barrier test 1" finished assignment, num[1] = 1.
+Thread "Barrier test 1" reached barrier with remain = 2.
+Phase 1: thread "Barrier test 2" finished assignment, num[2] = 1.
+Thread "Barrier test 2" reached barrier with remain = 1.
+Phase 1: thread "Barrier test 3" finished assignment, num[3] = 1.
+Thread "Barrier test 3" reached barrier with remain = 0.
+All threads reached barrier.
+Phase 2: thread "Barrier test 3" finished assignment, num[3] = 2.
+Thread "Barrier test 3" reached barrier with remain = 3.
+Phase 2: thread "Barrier test 0" finished assignment, num[0] = 2.
+Thread "Barrier test 0" reached barrier with remain = 2.
+Phase 2: thread "Barrier test 1" finished assignment, num[1] = 2.
+Thread "Barrier test 1" reached barrier with remain = 1.
+Phase 2: thread "Barrier test 2" finished assignment, num[2] = 2.
+Thread "Barrier test 2" reached barrier with remain = 0.
+All threads reached barrier.
+Phase 3: thread "Barrier test 2" finished assignment, num[2] = 3.
+Thread "Barrier test 2" reached barrier with remain = 3.
+Phase 3: thread "Barrier test 3" finished assignment, num[3] = 3.
+Thread "Barrier test 3" reached barrier with remain = 2.
+Phase 3: thread "Barrier test 0" finished assignment, num[0] = 3.
+Thread "Barrier test 0" reached barrier with remain = 1.
+Phase 3: thread "Barrier test 1" finished assignment, num[1] = 3.
+Thread "Barrier test 1" reached barrier with remain = 0.
+All threads reached barrier.
+Barrier test Finished.
+No threads ready or runnable, and no pending interrupts.
+Assuming the program completed.
+Machine halting!
+
+Ticks: total 320, idle 0, system 320, user 0
+Disk I/O: reads 0, writes 0
+Console I/O: reads 0, writes 0
+Paging: faults 0
+Network I/O: packets received 0, sent 0
+
+Cleaning up...
+```
+
+### 结论
+
+共进行了三个阶段的赋值，每个阶段中，每个线程正确地对其负责的变量进行了赋值；在不同的阶段中，每个线程的赋值不同，符合预期，实验成功。
