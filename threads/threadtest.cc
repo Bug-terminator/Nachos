@@ -289,6 +289,7 @@ void Lab3Barrier()
     //结束
     printf("Barrier test Finished.\n");
 }
+
 //----------------------------------------------------------------------
 // ThreadTest
 // 	Invoke a test routine.

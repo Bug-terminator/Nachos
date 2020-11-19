@@ -8,10 +8,11 @@
 #include "copyright.h"
 #include "system.h"
 
+//lab1 线程管理
 Thread *threadPtr[maxThreadNum];
 bool isAllocatable[maxThreadNum];
 int threadCount = 0;
-char *transEnum[threadStatusNum] = {"JUST_CREATED", "RUNNING", "READY", "BLOCKED"};
+char *transEnum[threadStatusNum] = {"JUST_CREATED", "RUNNING", "READY", "BLOCKED"}; //ts方法用到
 // This defines *all* of the global data structures used by Nachos.
 // These are all initialized and de-allocated by this file.
 
@@ -70,9 +71,10 @@ extern void Cleanup();
 static void
 TimerInterruptHandler(int dummy)
 {
+    DEBUG('c', " << random Context Switch (stats->totalTicks = %d) >>\n", stats->totalTicks);
     if (interrupt->getStatus() != IdleMode)
     {
-#ifdef ROUND_ROBIN//时间片轮转
+#ifdef ROUND_ROBIN //时间片轮转
 
         currentThread->totalRunningTime--;
         currentThread->timeSlice--;
@@ -84,7 +86,7 @@ TimerInterruptHandler(int dummy)
                 currentThread->timeSlice = 5; //重新获取时间片，并加入就绪队列
                 interrupt->YieldOnReturn();
             }
-#else//原始版本
+#else //原始版本
         interrupt->YieldOnReturn();
 #endif
     }
@@ -102,12 +104,15 @@ TimerInterruptHandler(int dummy)
 //----------------------------------------------------------------------
 void Initialize(int argc, char **argv)
 {
-    //初始化
+#ifdef LAB1
+    //lab1 初始化
     for (int i = 0; i < maxThreadNum; ++i)
     {
         isAllocatable[i] = true;
         threadPtr[i] = NULL;
     }
+#endif
+    
     int argCount;
     char *debugArgs = "";
     bool randomYield = FALSE;
@@ -173,7 +178,7 @@ void Initialize(int argc, char **argv)
     interrupt = new Interrupt;   // start up interrupt handling
     scheduler = new Scheduler(); // initialize the ready queue
     if (randomYield)             // start the timer (if needed)//lab3 不使用时间片轮转
-    timer = new Timer(TimerInterruptHandler, 0, randomYield);
+        timer = new Timer(TimerInterruptHandler, 0, randomYield);
 
     threadToBeDestroyed = NULL;
 
