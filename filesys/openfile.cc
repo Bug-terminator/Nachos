@@ -182,6 +182,8 @@ OpenFile::WriteAt(char *from, int numBytes, int position)
         synchDisk->WriteSector(hdr->ByteToSector(i * SectorSize), 
 					&buf[(i - firstSector) * SectorSize]);
     delete [] buf;
+    //lab4 新增对lastModifiedTime的维护
+    hdr->lastModifiedTime = stats->totalTicks;
     return numBytes;
 }
 

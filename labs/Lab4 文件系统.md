@@ -87,9 +87,9 @@ echo "=== tests the performance of the Nachos file system ==="
 > +-----------------------------------+
 > |             FileSystem            |
 > +-----------------------------------+
-> |              OpenFile             |	 <-memory(inode index)
+> |              OpenFile             |	 <-memory(i-node index)
 > +------------+----------+-----------+
-> | File Header| Directory|  Bitmap   |    <-disk(inode)                 
+> | File Header| Directory|  Bitmap   |    <-disk(i-node)                 
 > +-----------------------------------+
 > |             SynchDisk             |
 > +-----------------------------------+
@@ -139,7 +139,7 @@ void SynchDisk::ReadSector(int sectorNumber, char *data)
 }
 ```
 
-> 当线程向磁盘设备发出读访问请求后，等待磁盘中断的到来。一旦磁盘中断来到，中断处理 程序执行 semaphore->V()操作，ReadSector 得以继续运行。对磁盘同步写也基于同样的原理
+> 当线程向磁盘设备发出读访问请求后，等待磁盘中断的到来。一旦磁盘中断来到，中断处理程序执行semaphore->V()操作，ReadSector得以继续运行。对磁盘同步写也基于同样的原理。
 
 #### bitmap.cc bitmap.h
 
@@ -170,18 +170,18 @@ private:
 
 #### filehdr.cc filehdr.h
 
-> 文件头实际上就是 UNIX 文件系统中所说的 inode 结构，它给出一个文件除了文件名之外的所有属性，包括文件长度、地址索引表等等（文件名属性在目录中给出）。所谓索引表，就是文件的逻辑地址和实际的物理地址的对应关系。Nachos 的文件头可以存放在磁盘上，也可以存放在宿主机内存中。在磁盘上存放时一个文件头占用一个独立的扇区。Nachos 文件 头的索引表只有直接索引。 
+> 文件头实际上就是 UNIX 文件系统中所说的 i-node 结构，它给出一个文件除了文件名之外的所有属性，包括文件长度、地址索引表等等（文件名属性在目录中给出）。所谓索引表，就是文件的逻辑地址和实际的物理地址的对应关系。Nachos 的文件头可以存放在磁盘上，也可以存放在宿主机内存中。在磁盘上存放时一个文件头占用一个独立的扇区。Nachos 文件 头的索引表只有直接索引。 
 >
 > 文件头的定义和实现如下所示，由于目前 Nachos 只支持直接索引，而且文件长度一旦固定， 就不能变动。所以文件头的实现比较简单，这里不再赘述。 
 
 ```cpp
 class FileHeader
-{ //inode
+{ //i-node
 public:
-  bool Allocate(BitMap *bitMap, int fileSize); // 通过文件大小初始化inode
-  void Deallocate(BitMap *bitMap);             // 将一个文件所占用的数据空间释放（没有释放inode的空间）
-  void FetchFrom(int sectorNumber);            // 从磁盘中取出inode
-  void WriteBack(int sectorNumber);            // 将inode写入磁盘
+  bool Allocate(BitMap *bitMap, int fileSize); // 通过文件大小初始化i-node（新）
+  void Deallocate(BitMap *bitMap);             // 将一个文件所占用的数据空间释放（没有释放i-node的空间）
+  void FetchFrom(int sectorNumber);            // 从磁盘中取出i-node（旧）
+  void WriteBack(int sectorNumber);            // 将i-node写入磁盘
   int ByteToSector(int offset);                // 实现文件逻辑地址到物理地址的转换
   int FileLength();                            // 返回文件长度
   void Print();                                // 打印文件头信息（调试用）
@@ -191,6 +191,8 @@ private:
   int dataSectors[NumDirect]; // 文件索引表
 };
 ```
+
+按照习惯，我将Nachos的fIleHeader称为i-node，下同。
 
 #### openfile.cc openfile.h
 
@@ -223,9 +225,9 @@ class Directory
 public:
   Directory(int size); // 初始化一张空目录，size规定了目录中存放文件个数
   ~Directory();        // 析构目录
-  void FetchFrom(OpenFile *file); // 从目录文件中读入目录内容到内存，目录在内存中
-  void WriteBack(OpenFile *file); // 将该目录内容从内存写回目录文件
-  int Find(char *name); // 在目录中找文件名，返回文件的inode的物理位置
+  void FetchFrom(OpenFile *file); // 从目录inode中读入目录内容到内存
+  void WriteBack(OpenFile *file); // 将该目录内容从内存写回目录inode
+  int Find(char *name); // 在目录中找文件名，返回文件的i-node的物理位置
   bool Add(char *name, int newSector); // 在目录中添加一个文件
   bool Remove(char *name); // 从目录中移除一个文件
   void List();  // 打印目录信息
@@ -237,6 +239,8 @@ private:
 };
 
 ```
+
+> Nachos默认初始化一张大小为10的目录，每个目录项的大小为`10 * sizeof(char) + sizeof(int) + sizeof(bool) = 15`, 十个目录项大小为150B, 超过了扇区大小128B，这是否是个bug？
 
 #### filesys.cc filesys.h
 
@@ -262,30 +266,15 @@ private:
 
 > 增加文件描述信息，如“类型”、“创建时间”、“上次访问时间”、“上次修改时间”、“路径”等等。尝试突破文件名长度的限制。
 
+#### 背景知识：UNIX i-node
 
-
-|     新增成员变量     |     描述     |
-| :------------------: | :----------: |
-|  FileType filetype   |   文件类型   |
-|    int createTime    |   创建时间   |
-| int lastVisitedTime  | 上次访问时间 |
-| int lastModifiedTime | 上次修改时间 |
-|      char* path      |     路径     |
-|                      |              |
-
-```cpp
-
-```
-
-#### UNIX i-node
-
-> 1.UNIX文件系统中的主要结构 inode ，目录项中记录的是文件名和文件相对应的 inode 在整个 inode 区中的索引号，文件 inode 结构中除了存放文件的属性外，最主要的是文件的索引表。
+> 1.UNIX文件系统中的主要结构 i-node ，目录项中记录的是文件名和文件相对应的 i-node 在整个 i-node 区中的索引号，文件 i-node 结构中除了存放文件的属性外，最主要的是文件的索引表。
 >
-> 2.磁盘存储空间的安排 在 UNIX 文件系统中，磁盘块的作用分成两类：一类存放文件的 inode，这一类磁盘块组织 在一起，形成 inode 区；另一类存放文件内容本身，该类的集合形成存储数据区，如图 4.7。 图中， 0#块用来存放系统的自举程序； 1#块为管理块，管理本文件系统中资源的申请和回收。 主要内容有：
+> 2.磁盘存储空间的安排 在 UNIX 文件系统中，磁盘块的作用分成两类：一类存放文件的 i-node，这一类磁盘块组织 在一起，形成 i-node 区；另一类存放文件内容本身，该类的集合形成存储数据区，如图 4.7。 图中， 0#块用来存放系统的自举程序； 1#块为管理块，管理本文件系统中资源的申请和回收。 主要内容有：
 >
 > ![image-20201119163538243](Lab4 文件系统.assets/image-20201119163538243.png)
 >
-> 3. 每个Nachos 文件的 inode 占用一个单独的扇区，分散在物理磁盘的任何地方，同一般存储扇区用同 样的方式进行申请和回收。
+> 3. 每个Nachos 文件的 i-node 占用一个单独的扇区，分散在物理磁盘的任何地方，同一般存储扇区用同样的方式进行申请和回收。
 >
 >    ```
 >    Nachos Disk Allocation Structure
@@ -299,17 +288,59 @@ private:
 >     0#: System bitmap file's i-node
 >    ```
 >
-> 4. Nachos 则只有一级目录，也就是只有根目录，所有的文件都在根目录下。而且根目录中可以存放的文件数是有限的。Nachos 文件系统的根目录同样也是通过文件方式存放的，它的 inode 占据了 1 号扇区。
+> 4. Nachos 则只有一级目录，也就是只有根目录，所有的文件都在根目录下。而且根目录中可以存放的文件数是有限的。Nachos 文件系统的根目录同样也是通过文件方式存放的，它的 i-node 占据了 1 号扇区。
 >
-> 5. Nachos 同一般的 UNIX 一样，采用索引表进行物理地址和逻辑地址之间的转换，索引表存放在文件的 inode 中。但是目前 Nachos 采用的索引都是直接索引，所以 Nachos 的 最大文件长度不能大于 4K。
+> 5. Nachos 同一般的 UNIX 一样，采用索引表进行物理地址和逻辑地址之间的转换，索引表存放在文件的 i-node 中。但是目前 Nachos 采用的索引都是直接索引，所以 Nachos 的最大文件长度不能大于4K。
 
-Nachos的file header等价于UNIX中的i-node，因此我将题述的几个变量加在code/filesys/filehdr.h的FileHeader类中：
+#### 新增变量
+
+Nachos的file header等价于UNIX中的i-node，因此我将题述的几个变量加在code/filesys/filehdr.h的FileHeader类中，方便起见，设为public：
+
+```cpp
+class FileHeader
+{
+  ...
+public:
+  //lab4新增
+  int createTime; //文件创造时间
+  int lastVisitedTime; //文件上次被访问的时间
+  int lastModifiedTime;//文件上次被修改的时间
+  int type; //文件类型，0表示i-node，1表示普通文件，2表示索引文件(Exercise3)
+  char *path; //文件路径
+};
+
+```
+
+新增宏：
+
+```cpp
+//----------------------------------------------------------------------
+//Lab4 Exercise2 新增成员变量
+//----------------------------------------------------------------------
+#define VAR_NUM  7//i-node中的变量数，变量的均占4B(int, char *), i-node中共7个变量，所以为7
+#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // i-node中索引表大小,值为                                                                                    //（128 -  4*7）/4 = 25
+#define MaxFileSize (NumDirect * SectorSize) //文件最大长度 25 * 128 = 3200B
+```
+
+#### 维护成员变量						
+
+Nachos文件通过code/filesys/filesys.cc中的create函数创建，创建文件会调用FileHeader::Allocate()函数初始化一个i-node，应该在此函数内部增加对createTime的维护。每次访问文件（无论是读还是写），都会调用FileHeader::ByteToSector()函数来执行地址转换，所以应该在其中加入对lastVisitedTime的维护。而lastModifiedTime稍微复杂一点，只有对文件进行写操作时才会更新，所以应该在OpenFile::WriteAt()的结尾处增加对它的维护，表示一次写的结束。
+
+以上的实现假设对i-node的修改不算作对文件本身的修改。
+
+具体实现请查看`code/filesys/openfile.cc`和`code/filesys/filehdr.cc`。
+
+#### 突破文件名长度的限制
+
+文件名位于目录项中，将char[]改为char*即可。
+
+这样一来，一个directoryEntry的大小为sizeof(char*) + sizeof(bool) + sizeof(int) = 9；一个sector可以存放 128 / 9 = 14个目录项。修改宏
 
 ### Exercise 3 扩展文件长度
 
 > 改直接索引为间接索引，以突破文件长度不能超过4KB的限制。
 
-
+在Exercise2中增加5个成员变量之后，文件的最大长度变为3200B，页表索引为25项。
 
 ### Exercise 4 实现多级目录
 

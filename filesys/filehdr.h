@@ -18,12 +18,12 @@
 #include "bitmap.h"
 
 //----------------------------------------------------------------------
-//Lab4 新增宏
+//Lab4 Exercise2 新增成员变量
 //----------------------------------------------------------------------
-//时间用int还是char[]?
-#define VAR_NUM  7//inode中的变量数，变量的均占4B(int, char *), inode中共7个变量，所以为7
-#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // inode中索引表大小
-#define MaxFileSize (NumDirect * SectorSize) //文件最大长度
+#define VAR_NUM  7//i-node中的变量数，变量的均占4B(int, char *), i-node中共7个变量，所以为7
+#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // i-node中索引表大小,值为   
+                                                                       //（128 -  4*7）/4 = 25
+#define MaxFileSize (NumDirect * SectorSize) //文件最大长度 25 * 128 = 3200
 
 //----------------------------------------------------------------------
 //原始版本
@@ -49,6 +49,13 @@
 class FileHeader
 {
 public:
+   //lab4新增
+  int createTime;
+  int lastVisitedTime;
+  int lastModifiedTime;
+  int type;
+  char *path;
+
   bool Allocate(BitMap *bitMap, int fileSize); // Initialize a file header,
       //  including allocating space
       //  on disk for the file data
@@ -69,12 +76,7 @@ public:
   void Print(); // Print the contents of the file.
 
 private:
-  //lab4新增
-  int createTime;
-  int lastVisitedTime;
-  int lastModifiedTime;
-  int type;
-  char *path;
+ 
   
   //原始版本
   int numBytes;               // Number of bytes in the file
