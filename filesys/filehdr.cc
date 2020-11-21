@@ -23,7 +23,6 @@
 // of liability and disclaimer of warranty provisions.
 
 #include "copyright.h"
-
 #include "system.h"
 #include "filehdr.h"
 
@@ -37,18 +36,72 @@
 //	"freeMap" is the bit map of free disk sectors
 //	"fileSize" is the bit map of free disk sectors
 //----------------------------------------------------------------------
-
+//----------------------------------------------------------------------
+// lab4 突破文件长度限制
+// 根据文件长度分配内存需
+// 要分为两步：先分配直接
+// 索引，再分配一级索引。
+//----------------------------------------------------------------------
 bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 {
     numBytes = fileSize;
     numSectors = divRoundUp(fileSize, SectorSize);
     if (freeMap->NumClear() < numSectors)
-        return FALSE; // not enough space
+    {
 
-    for (int i = 0; i < numSectors; i++)
-        dataSectors[i] = freeMap->Find();
+        DEBUG('d', "There is not enough space.\tfile:%s\tline:%d\n", __FILE__, __LINE__); //d means disk
+        return FALSE;                                                                     // not enough space
+    }
+    //直接索引
+    if (numSectors <= DIRECT_NUM)
+    {
+        DEBUG('d', "Using direct allocation.\n");
+        for (int i = 0; i < numSectors; i++)
+            dataSectors[i] = freeMap->Find();
+    }
+    //一级索引
+    else if (numSectors <= DIRECT_NUM + PRIMARY_NUM)
+    {
+        DEBUG('d', "Using indirect allocation.\n");
+        //直接索引
+        for (int i = 0; i < DIRECT_NUM; i++)
+            dataSectors[i] = freeMap->Find();
+        //一级索引
+        int primary[PRIMARY_NUM];
+        //将物理块号存入一级索引表中
+        for (int i = 0; i < numSectors - DIRECT_NUM; ++i)
+            primary[i] = freeMap->Find();
+        //为一级索引表分配物理空间
+        int numSector = freeMap->Find();
+        if (numSector == -1)
+        {
+            DEBUG('d', "No space for primary table.\tfile:%s\tline:%d\n", __FILE__, __LINE__);
+            return FALSE;
+        }
+        //将一级索引表表号写入dataSectors中
+        dataSectors[DIRECT_NUM] = numSector;
+        //将一级索引表写入磁盘
+        synchDisk->WriteSector(numSector, (char *)primary);
+    }
+    //文件长度超过限制
+    else
+    {
+        DEBUG('d', "File length exceed!\tfile:%s\tline:%d\n", __FILE__, __LINE__);
+        return FALSE;
+    }
     createTime = stats->totalTicks; //lab4 文件创造时间
     return TRUE;
+
+    // 原始版本
+    // numBytes = fileSize;
+    // numSectors = divRoundUp(fileSize, SectorSize);
+    // if (freeMap->NumClear() < numSectors)
+    //     return FALSE; // not enough space
+
+    // for (int i = 0; i < numSectors; i++)
+    //     dataSectors[i] = freeMap->Find();
+    // createTime = stats->totalTicks; //lab4 文件创造时间
+    // return TRUE;
 }
 
 //----------------------------------------------------------------------
@@ -60,11 +113,46 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 
 void FileHeader::Deallocate(BitMap *freeMap)
 {
-    for (int i = 0; i < numSectors; i++)
+    //直接索引
+    if (numSectors <= DIRECT_NUM)
     {
-        ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
-        freeMap->Clear((int)dataSectors[i]);
+        for (int i = 0; i < numSectors; i++)
+        {
+            ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
+            freeMap->Clear((int)dataSectors[i]);
+        }
     }
+    //一级索引
+    else if (numSectors <= DIRECT_NUM + PRIMARY_NUM)
+    {
+        //直接索引
+        for (int i = 0; i < DIRECT_NUM; i++)
+        {
+            ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
+            freeMap->Clear((int)dataSectors[i]);
+        }
+        //在内存中初始化一个一级索引数组
+        int primary[PRIMARY_NUM];
+        //取出一级索引表表号
+        int numSector = dataSectors[DIRECT_NUM];
+        //将一级索引表读入内存
+        synchDisk->ReadSector(numSector, (char *)primary);
+        //清除一级索引表的磁盘空间
+        ASSERT(freeMap->Test((int)numSector)); // ought to be marked!
+        freeMap->Clear((int)numSector);
+        //释放一级索引表中的空间
+        for (int i = 0; i < numSectors - DIRECT_NUM; ++i)
+        {
+            ASSERT(freeMap->Test((int)primary[i])); // ought to be marked!
+            freeMap->Clear((int)primary[i]);
+        }
+    }
+    // 原始版本
+    // for (int i = 0; i < numSectors; i++)
+    // {
+    //     ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
+    //     freeMap->Clear((int)dataSectors[i]);
+    // }
 }
 
 //----------------------------------------------------------------------
@@ -100,11 +188,32 @@ void FileHeader::WriteBack(int sector)
 //
 //	"offset" is the location within the file of the byte in question
 //----------------------------------------------------------------------
-
 int FileHeader::ByteToSector(int offset)
 {
-    lastVisitedTime = stats->totalTicks; //lab4 新增上次访问时间
-    return (dataSectors[offset / SectorSize]);
+    //lab4 新增上次访问时间
+    lastVisitedTime = stats->totalTicks;
+    //lab4 改为间接索引
+    int v_index = offset / SectorSize; //虚拟块号
+    //虚拟索引号不能大于直接索引+间接索引的总和
+    ASSERT(v_index < DIRECT_NUM + PRIMARY_NUM);
+    //直接索引
+    if (v_index < DIRECT_NUM)
+    {
+        return dataSectors[v_index];
+    }
+    else
+    {
+        //在内存中初始化一个一级索引数组
+        int primary[PRIMARY_NUM];
+        //取出一级索引表表号
+        int numSector = dataSectors[DIRECT_NUM];
+        //将一级索引表读入内存
+        synchDisk->ReadSector(numSector, (char *)primary);
+        return primary[v_index - DIRECT_NUM];
+    }
+    //原始版本
+    // lastVisitedTime = stats->totalTicks; //lab4 新增上次访问时间
+    // return (dataSectors[offset / SectorSize]);
 }
 
 //----------------------------------------------------------------------

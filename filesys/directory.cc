@@ -91,7 +91,10 @@ int
 Directory::FindIndex(char *name)
 {
     for (int i = 0; i < tableSize; i++)
-        if (table[i].inUse && !strncmp(table[i].name, name, FileNameMaxLen))
+        //原始版本
+        // if (table[i].inUse && !strncmp(table[i].name, name, FileNameMaxLen))
+        //lab4 扩展文件名长度
+        if (table[i].inUse && table->name == name)
 	    return i;
     return -1;		// name not in directory
 }
@@ -135,7 +138,10 @@ Directory::Add(char *name, int newSector)
     for (int i = 0; i < tableSize; i++)
         if (!table[i].inUse) {
             table[i].inUse = TRUE;
-            strncpy(table[i].name, name, FileNameMaxLen); 
+            // 原始版本
+            // strncpy(table[i].name, name, FileNameMaxLen); 
+            // lab4 扩展文件名长度
+            table[i].name = name;
             table[i].sector = newSector;
         return TRUE;
 	}

@@ -2,8 +2,6 @@
 
 todo:makedep
 
-李糖 2001210320
-
 > 【实习建议】
 >
 > 1. 数据结构的修改和维护
@@ -99,7 +97,7 @@ echo "=== tests the performance of the Nachos file system ==="
 
 #### dick.cc disk.h
 
-TOBEDONE 
+TODO
 
 #### synchdisk.cc synchdisk.h
 
@@ -262,7 +260,7 @@ private:
 };
 ```
 
-#### Exercise 2 扩展文件属性
+### Exercise 2 扩展文件属性
 
 > 增加文件描述信息，如“类型”、“创建时间”、“上次访问时间”、“上次修改时间”、“路径”等等。尝试突破文件名长度的限制。
 
@@ -294,7 +292,7 @@ private:
 
 #### 新增变量
 
-Nachos的file header等价于UNIX中的i-node，因此我将题述的几个变量加在code/filesys/filehdr.h的FileHeader类中，方便起见，设为public：
+Nachos的file header等价于UNIX中的i-node，因此我将题述的几个变量加在code/filesys/filehdr.h的FileHeader类中，方便起见，设为public(虽然这样很不严谨，但是确实很省事）：
 
 ```cpp
 class FileHeader
@@ -305,7 +303,7 @@ public:
   int createTime; //文件创造时间
   int lastVisitedTime; //文件上次被访问的时间
   int lastModifiedTime;//文件上次被修改的时间
-  int type; //文件类型，0表示i-node，1表示普通文件，2表示索引文件(Exercise3)
+  int type; //文件类型，0表示i-node，1表示普通文件
   char *path; //文件路径
 };
 
@@ -334,17 +332,163 @@ Nachos文件通过code/filesys/filesys.cc中的create函数创建，创建文件
 
 文件名位于目录项中，将char[]改为char*即可。
 
-这样一来，一个directoryEntry的大小为sizeof(char*) + sizeof(bool) + sizeof(int) = 9；一个sector可以存放 128 / 9 = 14个目录项。修改宏
+这样一来，一个directoryEntry的大小为sizeof(char*) + sizeof(bool) + sizeof(int) = 9；一个sector可以存放 128 / 9 = 14个目录项。
 
 ### Exercise 3 扩展文件长度
 
 > 改直接索引为间接索引，以突破文件长度不能超过4KB的限制。
 
-在Exercise2中增加5个成员变量之后，文件的最大长度变为3200B，页表索引为25项。
+#### Allocate()/Deallocate()
+
+每次调用File system::Create()函数，都会调用FileHeader::Allocate()来分配物理空间。
+
+在Exercise2中增加5个成员变量之后，文件的最大长度变为3200B，文件索引为25项。规定索引表的前24项为直接接索引，最后一项为一级索引，存放的是一级索引表对应扇区号。每个一级索引占一个扇区，可以容纳128/4  = 32个索引项：
+
+```cpp
+//----------------------------------------------------------------------
+//Lab4 Exercise3 改为间接索引
+//----------------------------------------------------------------------
+#define DERECT_NUM 24  //直接索引数，表示[0,24)块
+#define PRIMARY_NUM (SectorSize / sizeof(int)) //一级索引块数，表示[24,56)块。文件最大长度 = 24 * 128 + 128/4 * 128 =  7168满足题意
+```
+
+```cpp
+//----------------------------------------------------------------------
+// lab4 突破文件长度限制
+// 根据文件长度分配内存需
+// 要分为两步：先分配直接
+// 索引，再分配一级索引。
+//----------------------------------------------------------------------
+bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
+{
+    numBytes = fileSize;
+    numSectors = divRoundUp(fileSize, SectorSize);
+    if (freeMap->NumClear() < numSectors)
+    {
+        DEBUG('d', "There is not enough space.\tfile:%s\tline:%d\n", __FILE__, __LINE__);//d means disk
+        return FALSE; // not enough space
+    }
+    //直接索引
+    if (numSectors <= DIRECT_NUM)
+    {
+        DEBUG('d', "Using direct allocation.\n");
+        for (int i = 0; i < numSectors; i++)
+            dataSectors[i] = freeMap->Find();
+    }
+    //一级索引
+    else if (numSectors <= DIRECT_NUM + PRIMARY_NUM)
+    {
+        DEBUG('d', "Using indirect allocation.\n");
+        //直接索引
+        for (int i = 0; i < DIRECT_NUM; i++)
+            dataSectors[i] = freeMap->Find();
+        //一级索引
+        int primary[PRIMARY_NUM];
+        //将物理块号存入一级索引表中
+        for (int i = 0; i < numSectors - DIRECT_NUM; ++i)
+            primary[i] = freeMap->Find();
+        //为一级索引表分配物理空间
+        int numSector = freeMap->Find();
+        if (numSector == -1)
+        {
+            DEBUG('d', "No space for primary table.\tfile:%s\tline:%d\n", __FILE__, __LINE__);
+            return FALSE;
+        }
+        //将一级索引表表号写入dataSectors中
+        dataSectors[DIRECT_NUM] = numSector;
+        //将一级索引表写入磁盘
+        synchDisk->WriteSector(numSector, (char *)primary);
+    }
+    //文件长度超过限制
+    else
+    {
+        DEBUG('d', "File length exceed!\tfile:%s\tline:%d\n", __FILE__, __LINE__);
+        return FALSE;
+    }
+    createTime = stats->totalTicks; //lab4 文件创造时间
+    return TRUE;
+}
+```
+
+相应地，我们需要对Deallocate函数做出改变：
+
+```cpp
+void FileHeader::Deallocate(BitMap *freeMap)
+{
+    //直接索引
+    if (numSectors <= DIRECT_NUM)
+    {
+        for (int i = 0; i < numSectors; i++)
+        {
+            ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
+            freeMap->Clear((int)dataSectors[i]);
+        }
+    }
+    //一级索引
+    else if (numSectors <= DIRECT_NUM + PRIMARY_NUM)
+    {
+        //直接索引
+        for (int i = 0; i < DIRECT_NUM; i++)
+        {
+            ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
+            freeMap->Clear((int)dataSectors[i]);
+        }
+        //在内存中初始化一个一级索引数组
+        int primary[PRIMARY_NUM];
+        //取出一级索引表表号
+        int numSector = dataSectors[DIRECT_NUM];
+        //将一级索引表读入内存
+        synchDisk->ReadSector(numSector, (char *)primary);
+        //清除一级索引表的磁盘空间
+        ASSERT(freeMap->Test((int)numSector)); // ought to be marked!
+        freeMap->Clear((int)numSector);
+        //释放一级索引表中的空间
+        for (int i = 0; i < numSectors - DIRECT_NUM; ++i)
+        {
+            ASSERT(freeMap->Test((int)primary[i])); // ought to be marked!
+            freeMap->Clear((int)primary[i]);
+        }
+    }
+}
+```
+
+可以发现：deallocate是allocate的一个逆向操作（清楚这一点可以大大降低编码的难度）。
+
+#### ByteToSector()
+
+每次执行地址转换的函数是ByteToSector()，因此我们还需要对它进行改变。
+
+```cpp
+//lab4 改为间接索引
+int FileHeader::ByteToSector(int offset)
+{
+    int v_index = offset / SectorSize; //虚拟块号
+    //虚拟索引号不能大于直接索引+间接索引的总和
+    ASSERT(v_index < DIRECT_NUM + PRIMARY_NUM);
+    //直接索引
+    if (v_index < DIRECT_NUM)
+    {
+        return dataSectors[v_index];
+    }
+    //间接索引
+    else
+    {
+        //在内存中初始化一个一级索引数组
+        int primary[PRIMARY_NUM];
+        //取出一级索引表表号
+        int numSector = dataSectors[DIRECT_NUM];
+        //将一级索引表读入内存
+        synchDisk->ReadSector(numSector, (char *)primary);
+        return primary[v_index - DIRECT_NUM];
+    }
+}
+```
+
+还有一些琐碎的改动,请查看`code/filesys/filehdr.cc`;
 
 ### Exercise 4 实现多级目录
 
-
+todo
 
 ### Exercise 5 动态调整文件长度
 
