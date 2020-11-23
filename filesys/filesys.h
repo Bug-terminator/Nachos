@@ -78,13 +78,14 @@ public:
 							 // If "format", there is nothing on
 							 // the disk, so initialize the directory
 							 // and the bitmap of free blocks.
+	//lab4 多级目录 name的含义为文件的绝对路径
+	bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp);
 
-	bool Create(char *name, int initialSize);
 	// Create a file (UNIX creat)
 
-	OpenFile *Open(char *name); // Open a file (UNIX open)
+	OpenFile *Open(char *path); // Open a file (UNIX open)
 
-	bool Remove(char *name); // Delete a file (UNIX unlink)
+	bool Remove(char *path); // Delete a file (UNIX unlink)
 
 	void List(); // List all the files in the file system
 

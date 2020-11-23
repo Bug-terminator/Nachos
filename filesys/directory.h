@@ -33,12 +33,19 @@
 class DirectoryEntry
 {
 public:
-  bool inUse;                    // Is this directory entry in use?
-  int sector;                    // Location on disk to find the
-                                 //   FileHeader for this file
+#ifndef List_Direcotry //原始版本
+  bool inUse; // Is this directory entry in use?
+  int sector; // Location on disk to find the
+              //   FileHeader for this file
   // char name[FileNameMaxLen + 1]; // Text name for file, with +1 for
   //                                // the trailing '\0'
-  char * name; //lab4 突破文件名长度限制
+  char *name; //lab4 突破文件名长度限制
+  //lab4 实现多级目录
+  int nextInode; //下一级目录的inode
+#else
+  // 链表目录(if needed)
+  DirectoryEntry *next;
+#endif
 };
 
 // The following class defines a UNIX-like "directory".  Each entry in
@@ -76,12 +83,16 @@ public:
                 //  names and their contents.
 
 private:
+#ifndef List_Direcotry //原始版本
   int tableSize;         // Number of directory entries
   DirectoryEntry *table; // Table of pairs:
                          // <file name, file header location>
 
   int FindIndex(char *name); // Find the index into the directory
                              //  table corresponding to "name"
+#else  //链表目录(if needed)
+  DirectoryEntry *FindEntry(char *name);
+#endif
 };
 
 #endif // DIRECTORY_H

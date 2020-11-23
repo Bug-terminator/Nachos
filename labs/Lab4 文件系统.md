@@ -223,8 +223,8 @@ class Directory
 public:
   Directory(int size); // 初始化一张空目录，size规定了目录中存放文件个数
   ~Directory();        // 析构目录
-  void FetchFrom(OpenFile *file); // 从目录inode中读入目录内容到内存
-  void WriteBack(OpenFile *file); // 将该目录内容从内存写回目录inode
+  void FetchFrom(OpenFile *file); // 从目录i-node中读入目录内容到内存
+  void WriteBack(OpenFile *file); // 将该目录内容从内存写回目录i-node
   int Find(char *name); // 在目录中找文件名，返回文件的i-node的物理位置
   bool Add(char *name, int newSector); // 在目录中添加一个文件
   bool Remove(char *name); // 从目录中移除一个文件
@@ -237,8 +237,6 @@ private:
 };
 
 ```
-
-> Nachos默认初始化一张大小为10的目录，每个目录项的大小为`10 * sizeof(char) + sizeof(int) + sizeof(bool) = 15`, 十个目录项大小为150B, 超过了扇区大小128B，这是否是个bug？
 
 #### filesys.cc filesys.h
 
@@ -488,7 +486,116 @@ int FileHeader::ByteToSector(int offset)
 
 ### Exercise 4 实现多级目录
 
-todo
+#### 准备工作
+
+让我们回顾以下Nachos从磁盘读入单级目录的步骤`code/filesys/filesys.cc`：
+
+1. 已知目录文件的i-node为1
+2. 打开目录文件(OpenFile)
+3. 在内存中new一个directory
+4. 调用directory的FetchFrom函数从磁盘读入目录
+
+为了实现多级目录，并保持步骤的一致性，我在DirectoryEntry中添加了下一级目录的i-node编号。
+
+```cpp
+class DirectoryEntry
+{
+public:
+  ...
+  //lab4 实现多级目录
+  int nextInode;//下一级目录的i-node
+};
+```
+
+Nachos规定目录最多包含10个目录项
+
+```cpp
+#define NumDirEntries 10
+```
+
+题目没要求对此进行改进，我们沿用Nachos的规定。这样一来，我们的目录在逻辑上是一颗n叉树(`n = 10`)；
+
+> 扩展目录大小的限制：将目录的组织方式从数组改为链表(重新定义一套目录，用宏List_Directory表示链表目录)
+>
+> ```cpp
+> class DirectoryEntry
+> {
+> public:
+> 	...
+>     DirectoryEntry *next; //链表目录(if needed)
+> };
+> ```
+>
+> 并将Directory::FindIndex()中的检索方式改为对链表的遍历：
+>
+> ```cpp
+> DirectoryEntry *Directory::FindEntry(char *name)
+> {
+>     DirectoryEntry *p = table;
+>     while (p && p->name != name)
+>         p = p->next;
+>     return p;
+> }
+> ```
+>
+> todo:Add()/Remove()/Find()
+
+Linux中使用'/'来区分不同级别的目录，并分别使用'.'和'..'来表示当前目录和上一级目录(todo)，我们沿用此规定。
+
+> 因为目前还没有实现shell，所以暂时只能实现'/',并且每次的查找都只能从root开始，所以需要我们输入绝对路径
+>
+> - e.g.
+>   - /etc/sysconfig/network 
+>   - /var/log/rpmpkgs 
+>   - /etc/rc.d/init.d
+
+这样一来，FileSystem::Create(), Remove()和Open()函数的参数的含义就发生了改变：
+
+```cpp
+e.g.
+bool Remove(char *name); // name表示文件的绝对路径
+```
+
+#### FileSystem::Create()
+
+在实现多级目录之前，Nachos创建一个新的文件的流程如下：
+
+1. 将目录从磁盘读入内存
+2. 查目录，找到空闲项，将新的inode插入
+3. 若插入失败，return false，磁盘中`inode/bitmap/directory`没变
+4. 若插入成功，需要将inode/bitmap/directory重新写回磁盘
+
+当我们实现了多级目录之后，对每一级的操作是不变的，因此我们可以直接递归地调用Nachos已经写好的Create。不过需要注意的一点是：每一级的写回操作应该需要判断下一级是否插入成功才可以进行:
+
+> e.g.
+>
+> 磁盘中创建一个新文件/level0/level1/filename，如果不判断下一级是否插入成功就直接写回磁盘，会导致出错：
+>
+> 1. 创建level0成功，写回磁盘；
+> 2. 创建levle1成功，写回磁盘；
+> 3. 创建filename失败，返回。
+>
+> 此时磁盘中多了level0和level1的信息。
+
+我们要保证下一级插入成功了才能对本级进行写回，应该使用树的后序遍历。
+
+```cpp
+//n叉树的后序遍历
+void PostOrder(TreeNode *root)
+{
+    if (root == NULL)
+        return;
+	//从左到右每一颗子树
+	while(some_condition)
+    PostOrder(everey_child);
+    // 访问root的数据
+	...
+}
+```
+
+相应地，我们需要对它们的实现进行改变`code/filesys/filesys.cc`：
+
+
 
 ### Exercise 5 动态调整文件长度
 

@@ -175,59 +175,194 @@ FileSystem::FileSystem(bool format)
 //	"initialSize" -- size of file to be created
 //----------------------------------------------------------------------
 
-bool FileSystem::Create(char *name, int initialSize)
+//原始版本
+// bool FileSystem::Create(char *path, int initialSize)
+// {
+//     Directory *directory;
+//     BitMap *freeMap;
+//     FileHeader *hdr;
+//     int sector;
+//     bool success;
+
+//     DEBUG('f', "Creating file %s, size %d\n", path, initialSize);
+
+//     //将根目录读入内存
+//     directory = new Directory(NumDirEntries);
+//     directory->FetchFrom(directoryFile);
+
+//     if (directory->Find(name) != -1)
+//         success = FALSE;
+//     else
+//     {
+//         freeMap = new BitMap(NumSectors);
+//         freeMap->FetchFrom(freeMapFile);
+//         sector = freeMap->Find();
+//         if (sector == -1)
+//             success = FALSE;
+
+//         //查dir，找到空闲项，将新的inode插入，我感觉这里有bug，存在这样一种情况：
+//         //先将新的dirEntry插入了dir，然后在下面的inode初始化中失败了，这样就多了一个无用的表项。
+//         //11:21更新，不会，因为出错时不会writeback，磁盘中的信息没变。
+//         else if (!directory->Add(name, sector))
+//             success = FALSE;
+//         else
+//         {
+//             //构造新的i-node，并分配初始化inode
+//             hdr = new FileHeader;
+//             if (!hdr->Allocate(freeMap, initialSize))
+//                 success = FALSE; // no space on disk for data
+//             else
+//             {
+//                 success = TRUE;
+
+//                 // 将inode写回磁盘
+//                 hdr->WriteBack(sector);
+
+//                 //更新磁盘中的目录和bitmap
+//                 directory->WriteBack(directoryFile);
+//                 freeMap->WriteBack(freeMapFile);
+//             }
+//             delete hdr;
+//         }
+//         delete freeMap;
+//     }
+//     delete directory;
+//     return success;
+// }
+
+//lab4 多级目录
+bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp)
 {
-    Directory *directory;
-    BitMap *freeMap;
-    FileHeader *hdr;
-    int sector;
-    bool success;
+    //递归出口
+    if (path == "")
+        return true;
 
-    DEBUG('f', "Creating file %s, size %d\n", name, initialSize);
-
-
-    //将dir读入内存
-    directory = new Directory(NumDirEntries);
-    directory->FetchFrom(directoryFile);
-
-
-    if (directory->Find(name) != -1)
-        success = FALSE; 
+    //根据path划分name
+    bool self = false, root = false; //该文件是否是文件本身？是否是根目录？
+    char *name = path, *p = path;
+    if (path[0] == '/') //根目录
+    {
+        name = path + 1;
+        root = true;
+    }
+    while (*p != '/' && *p != '\0')
+        p++;
+    if (*p == '\0')
+        self = true;
     else
+        *p = '\0';
+
+    //准备工作
+    Directory *directory = new Directory(NumDirEntries);
+    OpenFile *dirFile;
+    //将目录读入内存
+    if (root)
+        directory->FetchFrom(directoryFile);
+    else
+    {
+        dirFile = new OpenFile(dirInode);
+        directory->FetchFrom(dirFile);
+    }
+
+    BitMap *freeMap;
+    //根节点，需要读入位图
+    if (root)
     {
         freeMap = new BitMap(NumSectors);
         freeMap->FetchFrom(freeMapFile);
-        sector = freeMap->Find(); 
-        if (sector == -1)
-            success = FALSE; 
+    }
+    //否则用内存中的位图
+    else
+        freeMap = btmp;
+    bool success;
+    int sector;
+    DEBUG('f', "Creating file %s, size %d\n", path, initialSize);
 
-        //查dir，找到空闲项，将新的inode插入，我感觉这里有bug，存在这样一种情况：
-        //先将新的dirEntry插入了dir，然后在下面的inode初始化中失败了，这样就多了一个无用的表项。
-        //11:21更新，不会，因为出错时不会writeback，磁盘中的信息没变。
-        else if (!directory->Add(name, sector))
-            success = FALSE; 
+    //文件本身
+    if (self)
+    {
+        //已经存在
+        if (directory->Find(name) != -1)
+            success = FALSE;
         else
         {
-            //构造新的i-node，并分配初始化inode
-            hdr = new FileHeader;
-            if (!hdr->Allocate(freeMap, initialSize))
-                success = FALSE; // no space on disk for data
+            sector = freeMap->Find();
+            if (sector == -1)
+                success = FALSE;
+
+            //查dir，找到空闲项，将新的inode插入
+            else if (!directory->Add(name, sector))
+                success = FALSE;
             else
             {
-                success = TRUE;
-               
-                // 将inode写回磁盘
-                hdr->WriteBack(sector);
-
-                //更新磁盘中的目录和bitmap
-                directory->WriteBack(directoryFile);
-                freeMap->WriteBack(freeMapFile);
+                //构造新的i-node，并分配初始化inode
+                FileHeader *hdr = new FileHeader;
+                if (!hdr->Allocate(freeMap, initialSize))
+                    success = FALSE; // no space on disk for data
+                else
+                {
+                    success = TRUE;
+                    // 将inode写回磁盘
+                    hdr->WriteBack(sector);
+                    //更新磁盘中的目录和bitmap
+                    if (root) //根节点，写入磁盘根目录
+                        directory->WriteBack(directoryFile);
+                    else //否则，写入磁盘的其他目录
+                        directory->WriteBack(dirFile);
+                    //唯一一次更新磁盘中bitmap的机会
+                    freeMap->WriteBack(freeMapFile);
+                }
+                delete hdr;
             }
-            delete hdr;
         }
-        delete freeMap;
     }
+    //目录文件
+    else
+    {
+        int nextDirInode = directory->Find(name);
+        //目录已经存在,直接递归构造下一级目录
+        if (nextDirInode != -1)
+            success = Create(path + 1, nextDirInode, initialSize, freeMap);
+        //目录尚未存在，创造一个新的目录inode
+        else
+        {
+            sector = freeMap->Find();
+            if (sector == -1)
+                success = FALSE;
+
+            //查dir，找到空闲项，将新的inode插入
+            else if (!directory->Add(name, sector))
+                success = FALSE;
+            else
+            {
+                //构造新的i-node，并分配初始化inode
+                FileHeader *hdr = new FileHeader;
+                if (!hdr->Allocate(freeMap, DirectoryFileSize))
+                    success = FALSE; // no space on disk for data
+                else
+                {
+                    // 将inode写回磁盘
+                    hdr->WriteBack(sector);
+                    success = Create(path + 1, sector, initialSize, freeMap);
+                    //下一级目录的物理空间成功分配
+                    if (success)
+                    {
+                        //更新磁盘中的目录
+                        if (root) //根节点，写入磁盘根目录
+                            directory->WriteBack(directoryFile);
+                        else //否则，写入磁盘的其他目录
+                            directory->WriteBack(dirFile);
+                    }
+                }
+                delete hdr;
+            }
+        }
+    }
+    if (root)
+        delete freeMap;
     delete directory;
+    if (dirFile)
+        delete dirFile;
     return success;
 }
 
