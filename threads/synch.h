@@ -141,7 +141,7 @@ private:
   // plus some other stuff you'll need to define
 };
 
-// Lab3: Challenge Barrier
+// Lab3: Challenge1 Barrier
 
 class Barrier
 {
@@ -159,4 +159,29 @@ private:
   Lock *mutex;          // condition中使用的锁
   Condition *condition; // 用来阻塞线程并唤醒他们
 };
+
+//Lab3 Challenge2 读写锁
+class RWLock
+{
+public:
+  RWLock(char *debugName);           // 构造函数
+  ~RWLock();                         // 析构函数
+  char *getName() { return (name); } // debug辅助
+
+  // 读者锁
+  void ReaderAcquire();
+  void ReaderRelease();
+  // 写者锁
+  void WriterAcquire();
+  void WriterRelease();
+
+private:
+  char *name;              // debug用
+  int num_readers_active;  //已获取锁的读者的数量
+  int num_writers_waiting; //等待访问的写者数（整数）
+  int writer_active;       //写者是否已获得锁（布尔值）
+  Condition *COND;         //条件变量COND
+  Lock *g;                 //互斥锁g
+};
+
 #endif // SYNCH_H

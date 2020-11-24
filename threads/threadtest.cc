@@ -156,7 +156,7 @@ Lock *mutex;             //mutex->缓冲区的互斥访问
 Condition *full, *empty; //full->生产者的条件变量，empty->消费者的条件变量
 
 //消费者线程
-void comsumer(int dummy)
+void Comsumer(int dummy)
 {
     while (stats->totalTicks < TESTTIME) //约等于while(true),这样写可以在有限的时间内结束
     {
@@ -185,7 +185,7 @@ void comsumer(int dummy)
 }
 
 //生产者线程
-void producer(int dummy)
+void Producer(int dummy)
 {
     while (stats->totalTicks < TESTTIME) //约等于while(true),这样写可以在有限的时间内结束
     {
@@ -230,7 +230,7 @@ void Lab3ProducerAndComsumer()
         char threadName[20];
         sprintf(threadName, "Comsumer %d", i); //给线程命名
         threadComsumer[i] = new Thread(strdup(threadName));
-        threadComsumer[i]->Fork(comsumer, 0);
+        threadComsumer[i]->Fork(Comsumer, 0);
     }
     //初始化生产者
     for (int i = 0; i < THREADNUM_P; ++i)
@@ -238,7 +238,7 @@ void Lab3ProducerAndComsumer()
         char threadName[20];
         sprintf(threadName, "Producer %d", i); //给线程命名
         threadProducer[i] = new Thread(strdup(threadName));
-        threadProducer[i]->Fork(producer, 0);
+        threadProducer[i]->Fork(Producer, 0);
     }
     while (!scheduler->isEmpty())
         currentThread->Yield(); //跳过main的执行
@@ -260,7 +260,7 @@ int num[THREADNUM];
 Barrier *barrier;
 
 //为每个变量赋值，变量与线程一一对应
-void assignValue(int i) //i代表数组线标
+void AssignValue(int i) //i代表数组线标
 {
     //每个循环代表一个阶段
     for (int j = 1; j <= PHASENUM; ++j)
@@ -282,12 +282,95 @@ void Lab3Barrier()
         char threadName[30];
         sprintf(threadName, "Barrier test %d", i); //给线程命名
         threads[i] = new Thread(strdup(threadName));
-        threads[i]->Fork(assignValue, i);
+        threads[i]->Fork(AssignValue, i);
     }
     while (!scheduler->isEmpty())
         currentThread->Yield(); //跳过main的执行
     //结束
     printf("Barrier test Finished.\n");
+}
+
+//----------------------------------------------------------------------
+// lab3 Challenge1 RWLock
+// 随机产生一定数量的读者和写者
+// 对临界资源buffer进行读写；
+// 写者的任务：写一句拿破仑的名言
+// "Victory belongs to the most persevering"
+// 直到写者写完为止
+//----------------------------------------------------------------------
+
+#define THREADNUM_R (Random() % 4 + 1) //读者数,不超过4
+#define THREADNUM_W (Random() % 4 + 1) //写者数,不超过4
+RWLock *rwlock;
+const string QUOTE = "Victory belongs to the most persevering"; //拿破仑的名言
+const int QUOTE_SIZE = QUOTE.size();                            //长度
+int p = 0;                                                      //写者公用的quote下标，初始化为零
+string buffer;                                                  //读者和写者的公用buffer
+
+//写者线程
+void Writer(int dummy)
+{
+    while (p < QUOTE_SIZE)
+    {
+        rwlock->WriterAcquire();
+        buffer.push_back(QUOTE[p++]);
+        printf("%s has wrote a char to buffer: %s", currentThread->getName(), buffer);
+        rwlock->WriterRelease();
+        interrupt->OneTick();
+        currentThread->Yield();
+    }
+}
+
+//读者线程
+void Reader(int dummy)
+{
+    while (p < QUOTE_SIZE)
+    {
+        rwlock->ReaderAcquire();
+        printf("%s", buffer);
+        rwlock->ReaderRelease();
+        interrupt->OneTick();
+        currentThread->Yield();
+    }
+}
+void Writer(int dummy)
+{
+    rwlock->ReaderAcquire();
+    if (p < QUOTE.size())
+        printf("%s has wrote a char to buffer.\t", currentThread->getName());
+    rwlock->WriterRelease();
+}
+void Lab3RWLock()
+{
+    printf("Random created %d readers, %d writers.\n", THREADNUM_R, THREADNUM_W);
+
+    rwlock = new RWLock("RWLock"); //初始化rwlock
+
+    Thread *threadReader[THREADNUM_R];
+    Thread *threadWriter[THREADNUM_W];
+
+    //初始化写者
+    for (int i = 0; i < THREADNUM_C; ++i)
+    {
+        char threadName[20];
+        sprintf(threadName, "Writer %d", i); //给线程命名
+        threadWriter[i] = new Thread(strdup(threadName));
+        threadWriter[i]->Fork(Writer, 0);
+    }
+    //初始化读者
+    for (int i = 0; i < THREADNUM_P; ++i)
+    {
+        char threadName[20];
+        sprintf(threadName, "Reader %d", i); //给线程命名
+        threadReader[i] = new Thread(strdup(threadName));
+        threadReader[i]->Fork(Reader, 0);
+    }
+
+    while (!scheduler->isEmpty())
+        currentThread->Yield(); //跳过main的执行
+
+    //结束
+    printf("Producer consumer test Finished.\n");
 }
 
 //----------------------------------------------------------------------
@@ -318,6 +401,9 @@ void ThreadTest()
         break;
     case 6:
         Lab3ProducerAndComsumer();
+        break;
+    case 7:
+        Lab3RWLock();
         break;
     default:
         printf("No test specified.\n");

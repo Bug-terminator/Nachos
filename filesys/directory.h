@@ -22,7 +22,9 @@
 //lab4 突破文件名长度限制
 // #define FileNameMaxLen 9 // for simplicity, we assume
 //                          // file names are <= 9 characters long
-
+//文件类型
+#define NORM 0
+#define DIR 1
 // The following class defines a "directory entry", representing a file
 // in the directory.  Each entry gives the name of the file, and where
 // the file's header is to be found on disk.

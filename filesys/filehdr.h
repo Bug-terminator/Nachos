@@ -21,7 +21,7 @@
 //Lab4 Exercise2 新增成员变量
 //----------------------------------------------------------------------
 #define VAR_NUM 7                                                      //i-node中的变量数，变量的均占4B(int, char *), i-node中共7个变量，所以为7
-#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // i-node中索引表大小,值为 \
+#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // i-node中索引表大小,值为
                                                                        //（128 -  4*7）/4 = 25
 #define MaxFileSize (NumDirect * SectorSize)                           //文件最大长度 25 * 128 = 3200
 
@@ -62,8 +62,10 @@ public:
   int lastModifiedTime;
   int type;
   char *path;
-
-  bool Allocate(BitMap *bitMap, int fileSize); // Initialize a file header,
+  //lab4 扩展文件属性
+  bool Allocate(BitMap *freeMap, int fileSize, int tp);
+  //原始版本
+  // bool Allocate(BitMap *bitMap, int fileSize); // Initialize a file header,
                                                //  including allocating space
                                                //  on disk for the file data
   void Deallocate(BitMap *bitMap);             // De-allocate this file's

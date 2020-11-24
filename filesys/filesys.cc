@@ -97,8 +97,8 @@ FileSystem::FileSystem(bool format)
         // Second, allocate space for the data blocks containing the contents
         // of the directory and bitmap files.  There better be enough space!
 
-        ASSERT(mapHdr->Allocate(freeMap, FreeMapFileSize));
-        ASSERT(dirHdr->Allocate(freeMap, DirectoryFileSize));
+        ASSERT(mapHdr->Allocate(freeMap, FreeMapFileSize, NORM));
+        ASSERT(dirHdr->Allocate(freeMap, DirectoryFileSize, DIR));
 
         // Flush the bitmap and directory FileHeaders back to disk
         // We need to do this before we can "Open" the file, since open
@@ -174,6 +174,137 @@ FileSystem::FileSystem(bool format)
 //	"name" -- name of file to be created
 //	"initialSize" -- size of file to be created
 //----------------------------------------------------------------------
+//lab4 多级目录
+bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp)
+{
+    //根据path划分name
+    bool self = false, root = false; //该文件是否是文件本身？是否是根目录？
+    char *name = path, *p = path;
+    if (path[0] == '/') //根目录
+    {
+        name = path + 1;
+        root = true;
+    }
+    while (*p != '/' && *p != '\0')
+        p++;
+    if (*p == '\0')
+        self = true;
+    else
+        *p = '\0';
+
+    //准备工作
+    Directory *directory = new Directory(NumDirEntries);
+    OpenFile *dirFile = NULL;
+
+    if (root) //将目录读入内存
+        directory->FetchFrom(directoryFile);
+    else
+    {
+        dirFile = new OpenFile(dirInode);
+        //断言该文件为目录文件，防止错误地在普通文件中创建新文件
+        ASSERT(dirFile->getInode()->type == DIR);
+        directory->FetchFrom(dirFile);
+    }
+
+    BitMap *freeMap;
+    if (root) //根节点，需要从磁盘读入位图
+    {
+        freeMap = new BitMap(NumSectors);
+        freeMap->FetchFrom(freeMapFile);
+    }
+    else //否则用内存中的位图
+        freeMap = btmp;
+    bool success;
+    int sector;
+    DEBUG('f', "Creating file %s, size %d\n", path, initialSize);
+
+    //文件本身，递归出口
+    if (self)
+    {
+        //已经存在
+        if (directory->Find(name) != -1)
+            success = FALSE;
+        else
+        {
+            sector = freeMap->Find();
+            if (sector == -1)
+                success = FALSE;
+
+            //查dir，找到空闲项，将新的inode插入
+            else if (!directory->Add(name, sector))
+                success = FALSE;
+            else
+            {
+                //构造新的i-node，并分配初始化inode
+                FileHeader *hdr = new FileHeader;
+                if (!hdr->Allocate(freeMap, initialSize, NORM))
+                    success = FALSE; // no space on disk for data
+                else
+                {
+                    success = TRUE;
+                    // 将inode写回磁盘
+                    hdr->WriteBack(sector);
+                    //更新磁盘中的目录和bitmap
+                    if (root) //根节点，写入磁盘根目录
+                        directory->WriteBack(directoryFile);
+                    else //否则，写入磁盘的其他目录
+                        directory->WriteBack(dirFile);
+                    //唯一一次更新磁盘中bitmap的机会
+                    freeMap->WriteBack(freeMapFile);
+                }
+                delete hdr;
+            }
+        }
+    }
+    //目录文件
+    else
+    {
+        int nextDirInode = directory->Find(name);
+        //目录已经存在,直接递归构造下一级目录
+        if (nextDirInode != -1)
+            success = Create(p + 1, nextDirInode, initialSize, freeMap);
+        //目录尚未存在，创造一个新的目录inode
+        else
+        {
+            sector = freeMap->Find();
+            if (sector == -1)
+                success = FALSE;
+
+            //查dir，找到空闲项，将新的inode插入
+            else if (!directory->Add(name, sector))
+                success = FALSE;
+            else
+            {
+                //构造新的i-node，并分配初始化inode
+                FileHeader *hdr = new FileHeader;
+                if (!hdr->Allocate(freeMap, DirectoryFileSize, DIR))
+                    success = FALSE; // no space on disk for data
+                else
+                {
+                    // 将inode写回磁盘
+                    hdr->WriteBack(sector);
+                    success = Create(p + 1, sector, initialSize, freeMap);
+                    //下一级目录的物理空间成功分配
+                    if (success)
+                    {
+                        //更新磁盘中的目录
+                        if (root) //根节点，写入磁盘根目录
+                            directory->WriteBack(directoryFile);
+                        else //否则，写入磁盘的其他目录
+                            directory->WriteBack(dirFile);
+                    }
+                }
+                delete hdr;
+            }
+        }
+    }
+    if (root)
+        delete freeMap;
+    delete directory;
+    if (dirFile)
+        delete dirFile;
+    return success;
+}
 
 //原始版本
 // bool FileSystem::Create(char *path, int initialSize)
@@ -230,13 +361,103 @@ FileSystem::FileSystem(bool format)
 //     return success;
 // }
 
-//lab4 多级目录
-bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp)
+//----------------------------------------------------------------------
+// FileSystem::Open
+// 	Open a file for reading and writing.
+//	To open a file:
+//	  Find the location of the file's header, using the directory
+//	  Bring the header into memory
+//
+//	"name" -- the text name of the file to be opened
+//----------------------------------------------------------------------
+//Lab4 多级目录
+OpenFile *FileSystem::Open(char *path, int dirInode)
 {
-    //递归出口
-    if (path == "")
-        return true;
+    //根据path划分name
+    bool self = false, root = false; //该文件是否是文件本身？是否是根目录？
+    char *name = path, *p = path;
+    if (path[0] == '/') //根目录
+    {
+        name = path + 1;
+        root = true;
+    }
+    while (*p != '/' && *p != '\0')
+        p++;
+    if (*p == '\0')
+        self = true;
+    else
+        *p = '\0';
 
+    //准备工作
+    int sector;
+    Directory *directory = new Directory(NumDirEntries);
+    OpenFile *dirFile = NULL, *openFile = NULL;
+    if (root) //将目录读入内存
+        directory->FetchFrom(directoryFile);
+    else
+    {
+        dirFile = new OpenFile(dirInode);
+        directory->FetchFrom(dirFile);
+    }
+
+
+    if (self) //文件本身，递归出口
+    {
+        DEBUG('f', "Opening file %s\n", name);
+        sector = directory->Find(name);
+        if (sector >= 0) //找到文件
+            openFile = new OpenFile(sector);
+        else
+            DEBUG('f', "File doesn't exist, %s\n", name);
+    }
+    else //目录文件
+    {
+        DEBUG('f', "Opening dir %s\n", name);
+        sector = directory->Find(name);
+        if (sector >= 0) //找到目录，递归访问
+            openFile = Open(p + 1, sector);
+        else
+            DEBUG('f', "Dir doesn't exist, %s\n", name);
+    }
+    if (dirFile)
+        delete dirFile;
+    delete directory;
+    return openFile; // return NULL if not found}
+}
+
+//原始版本
+// OpenFile *
+// FileSystem::Open(char *name)
+// {
+//     Directory *directory = new Directory(NumDirEntries);
+//     OpenFile *openFile = NULL;
+//     int sector;
+
+//     DEBUG('f', "Opening file %s\n", name);
+//     directory->FetchFrom(directoryFile);
+//     sector = directory->Find(name);
+//     if (sector >= 0)
+//         openFile = new OpenFile(sector); // name was found in directory
+//     delete directory;
+//     return openFile; // return NULL if not found
+// }
+
+//----------------------------------------------------------------------
+// FileSystem::Remove
+// 	Delete a file from the file system.  This requires:
+//	    Remove it from the directory
+//	    Delete the space for its header
+//	    Delete the space for its data blocks
+//	    Write changes to directory, bitmap back to disk
+//
+//	Return TRUE if the file was deleted, FALSE if the file wasn't
+//	in the file system.
+//
+//	"name" -- the text name of the file to be removed
+//----------------------------------------------------------------------
+//lab4 多级目录
+bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
+{
     //根据path划分name
     bool self = false, root = false; //该文件是否是文件本身？是否是根目录？
     char *name = path, *p = path;
@@ -254,9 +475,8 @@ bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp)
 
     //准备工作
     Directory *directory = new Directory(NumDirEntries);
-    OpenFile *dirFile;
-    //将目录读入内存
-    if (root)
+    OpenFile *dirFile = NULL;
+    if (root) //根节点，将目录读入内存
         directory->FetchFrom(directoryFile);
     else
     {
@@ -265,179 +485,97 @@ bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp)
     }
 
     BitMap *freeMap;
-    //根节点，需要读入位图
-    if (root)
+    if (root) //根节点，需要从磁盘读入位图
     {
         freeMap = new BitMap(NumSectors);
         freeMap->FetchFrom(freeMapFile);
     }
-    //否则用内存中的位图
-    else
+    else //否则用内存中的位图
         freeMap = btmp;
     bool success;
     int sector;
-    DEBUG('f', "Creating file %s, size %d\n", path, initialSize);
+    FileHeader *fileHdr;
 
-    //文件本身
-    if (self)
+    if (self) //文件本身,递归出口. todo:递归删除其子目录
     {
-        //已经存在
-        if (directory->Find(name) != -1)
-            success = FALSE;
+        sector = directory->Find(name);
+        //文件不存在
+        if (sector == -1)
+        {
+            DEBUG('f', "File doesn't exist. %s\n", name);
+            success = FALSE; // file not found
+        }
+        //文件存在
         else
         {
-            sector = freeMap->Find();
-            if (sector == -1)
-                success = FALSE;
-
-            //查dir，找到空闲项，将新的inode插入
-            else if (!directory->Add(name, sector))
-                success = FALSE;
+            fileHdr = new FileHeader;
+            fileHdr->FetchFrom(sector);
+            fileHdr->Deallocate(freeMap); // remove data blocks
+            freeMap->Clear(sector);       // remove header block
+            directory->Remove(name);
+            freeMap->WriteBack(freeMapFile); // flush to disk
+            if (root)
+                directory->WriteBack(directoryFile); // flush to disk
             else
-            {
-                //构造新的i-node，并分配初始化inode
-                FileHeader *hdr = new FileHeader;
-                if (!hdr->Allocate(freeMap, initialSize))
-                    success = FALSE; // no space on disk for data
-                else
-                {
-                    success = TRUE;
-                    // 将inode写回磁盘
-                    hdr->WriteBack(sector);
-                    //更新磁盘中的目录和bitmap
-                    if (root) //根节点，写入磁盘根目录
-                        directory->WriteBack(directoryFile);
-                    else //否则，写入磁盘的其他目录
-                        directory->WriteBack(dirFile);
-                    //唯一一次更新磁盘中bitmap的机会
-                    freeMap->WriteBack(freeMapFile);
-                }
-                delete hdr;
-            }
+                directory->WriteBack(dirFile);
+            delete fileHdr;
+            success = TRUE;
         }
     }
     //目录文件
     else
     {
-        int nextDirInode = directory->Find(name);
-        //目录已经存在,直接递归构造下一级目录
-        if (nextDirInode != -1)
-            success = Create(path + 1, nextDirInode, initialSize, freeMap);
-        //目录尚未存在，创造一个新的目录inode
-        else
+        sector = directory->Find(name);
+        if (sector == -1)//目录不存在
         {
-            sector = freeMap->Find();
-            if (sector == -1)
-                success = FALSE;
-
-            //查dir，找到空闲项，将新的inode插入
-            else if (!directory->Add(name, sector))
-                success = FALSE;
-            else
-            {
-                //构造新的i-node，并分配初始化inode
-                FileHeader *hdr = new FileHeader;
-                if (!hdr->Allocate(freeMap, DirectoryFileSize))
-                    success = FALSE; // no space on disk for data
-                else
-                {
-                    // 将inode写回磁盘
-                    hdr->WriteBack(sector);
-                    success = Create(path + 1, sector, initialSize, freeMap);
-                    //下一级目录的物理空间成功分配
-                    if (success)
-                    {
-                        //更新磁盘中的目录
-                        if (root) //根节点，写入磁盘根目录
-                            directory->WriteBack(directoryFile);
-                        else //否则，写入磁盘的其他目录
-                            directory->WriteBack(dirFile);
-                    }
-                }
-                delete hdr;
-            }
+            DEBUG('f', "Dir doesn't exist. %s\n", name);
+            success = FALSE; // dir not found
         }
+        else//递归到下一级目录
+            success = Remove(p + 1, sector, freeMap);
     }
-    if (root)
-        delete freeMap;
+    
     delete directory;
-    if (dirFile)
-        delete dirFile;
+    if(root)
+    delete freeMap;
+    if(dirFile)
+    delete dirFile;
     return success;
 }
 
-//----------------------------------------------------------------------
-// FileSystem::Open
-// 	Open a file for reading and writing.
-//	To open a file:
-//	  Find the location of the file's header, using the directory
-//	  Bring the header into memory
-//
-//	"name" -- the text name of the file to be opened
-//----------------------------------------------------------------------
+//原始版本
+// bool FileSystem::Remove(char *name)
+// {
+//     Directory *directory;
+//     BitMap *freeMap;
+//     FileHeader *fileHdr;
+//     int sector;
 
-OpenFile *
-FileSystem::Open(char *name)
-{
-    Directory *directory = new Directory(NumDirEntries);
-    OpenFile *openFile = NULL;
-    int sector;
+//     directory = new Directory(NumDirEntries);
+//     directory->FetchFrom(directoryFile);
+//     sector = directory->Find(name);
+//     if (sector == -1)
+//     {
+//         delete directory;
+//         return FALSE; // file not found
+//     }
+//     fileHdr = new FileHeader;
+//     fileHdr->FetchFrom(sector);
 
-    DEBUG('f', "Opening file %s\n", name);
-    directory->FetchFrom(directoryFile);
-    sector = directory->Find(name);
-    if (sector >= 0)
-        openFile = new OpenFile(sector); // name was found in directory
-    delete directory;
-    return openFile; // return NULL if not found
-}
+//     freeMap = new BitMap(NumSectors);
+//     freeMap->FetchFrom(freeMapFile);
 
-//----------------------------------------------------------------------
-// FileSystem::Remove
-// 	Delete a file from the file system.  This requires:
-//	    Remove it from the directory
-//	    Delete the space for its header
-//	    Delete the space for its data blocks
-//	    Write changes to directory, bitmap back to disk
-//
-//	Return TRUE if the file was deleted, FALSE if the file wasn't
-//	in the file system.
-//
-//	"name" -- the text name of the file to be removed
-//----------------------------------------------------------------------
+//     fileHdr->Deallocate(freeMap); // remove data blocks
+//     freeMap->Clear(sector);       // remove header block
+//     directory->Remove(name);
 
-bool FileSystem::Remove(char *name)
-{
-    Directory *directory;
-    BitMap *freeMap;
-    FileHeader *fileHdr;
-    int sector;
-
-    directory = new Directory(NumDirEntries);
-    directory->FetchFrom(directoryFile);
-    sector = directory->Find(name);
-    if (sector == -1)
-    {
-        delete directory;
-        return FALSE; // file not found
-    }
-    fileHdr = new FileHeader;
-    fileHdr->FetchFrom(sector);
-
-    freeMap = new BitMap(NumSectors);
-    freeMap->FetchFrom(freeMapFile);
-
-    fileHdr->Deallocate(freeMap); // remove data blocks
-    freeMap->Clear(sector);       // remove header block
-    directory->Remove(name);
-
-    freeMap->WriteBack(freeMapFile);     // flush to disk
-    directory->WriteBack(directoryFile); // flush to disk
-    delete fileHdr;
-    delete directory;
-    delete freeMap;
-    return TRUE;
-}
+//     freeMap->WriteBack(freeMapFile);     // flush to disk
+//     directory->WriteBack(directoryFile); // flush to disk
+//     delete fileHdr;
+//     delete directory;
+//     delete freeMap;
+//     return TRUE;
+// }
 
 //----------------------------------------------------------------------
 // FileSystem::List

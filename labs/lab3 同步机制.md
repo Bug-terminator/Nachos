@@ -191,7 +191,7 @@ Lock *mutex;             //mutex->缓冲区的互斥访问
 Condition *full, *empty; //full->生产者的条件变量，empty->消费者的条件变量
 
 //消费者线程
-void comsumer(int dummy)
+void Comsumer(int dummy)
 {
     while (stats->totalTicks < TESTTIME) //约等于while(true),这样写可以在有限的时间内结束
     {
@@ -220,7 +220,7 @@ void comsumer(int dummy)
 }
 
 //生产者线程
-void producer(int dummy)
+void Producer(int dummy)
 {
     while (stats->totalTicks < TESTTIME) //约等于while(true),这样写可以在有限的时间内结束
     {
@@ -248,14 +248,13 @@ void producer(int dummy)
         interrupt->OneTick(); //系统时间自增
     }
 }
-
 void Lab3ProducerAndComsumer()
 {
     printf("Random created %d comsumers, %d producers.\n", THREADNUM_C, THREADNUM_P);
-		
-    full = new Condition("Full_condition");//初始化full
-    empty = new Condition("Empty_condition");//初始化empty
-    mutex = new Lock("buffer_mutex");//初始化mutex
+
+    full = new Condition("Full_condition");   //初始化full
+    empty = new Condition("Empty_condition"); //初始化empty
+    mutex = new Lock("buffer_mutex");         //初始化mutex
 
     Thread *threadComsumer[THREADNUM_C];
     Thread *threadProducer[THREADNUM_P];
@@ -266,7 +265,7 @@ void Lab3ProducerAndComsumer()
         char threadName[20];
         sprintf(threadName, "Comsumer %d", i); //给线程命名
         threadComsumer[i] = new Thread(strdup(threadName));
-        threadComsumer[i]->Fork(comsumer, 0);
+        threadComsumer[i]->Fork(Comsumer, 0);
     }
     //初始化生产者
     for (int i = 0; i < THREADNUM_P; ++i)
@@ -274,16 +273,14 @@ void Lab3ProducerAndComsumer()
         char threadName[20];
         sprintf(threadName, "Producer %d", i); //给线程命名
         threadProducer[i] = new Thread(strdup(threadName));
-        threadProducer[i]->Fork(producer, 0);
-    }   
-  
+        threadProducer[i]->Fork(Producer, 0);
+    }
     while (!scheduler->isEmpty())
         currentThread->Yield(); //跳过main的执行
 
     //结束
     printf("Producer consumer test Finished.\n");
 }
-
 ```
 
 在terminal中输入`./nachos -d c -q 6`可查看结果：
@@ -382,7 +379,7 @@ Cleaning up...
 
 结果显示，成功实现了多生产者消费者对于buffer的互斥访问，并使用了semaphore和condition，满足题目要求。
 
-## *challenge Barrier 
+## *challenge1 Barrier 
 
 > 可以使用Nachos 提供的同步互斥机制（如条件变量）来实现barrier，使得当且仅当若干个线程同时到达某一点时方可继续执行。
 
@@ -516,3 +513,140 @@ Cleaning up...
 ### 结论
 
 共进行了三个阶段的赋值，每个阶段中，每个线程正确地对其负责的变量进行了赋值；在不同的阶段中，每个线程的赋值不同，符合预期，实验成功。
+
+## *Challenge2 实现read/write lock
+
+> 基于Nachos提供的lock(synch.h和synch.cc)，实现read/write lock。使得若干线程可以同时读取某共享数据区内的数据，但是在某一特定的时刻，只有一个线程可以向该共享数据区写入数据。
+
+读者写者问题分为两类：
+
+1. 读者优先（最简单）：任何读者都不能仅仅因为作家正在等待而等待其他读者完成。
+2. 写者优先：写者准备就绪后，应该尽快让写者进入临界区。
+
+两类问题都可能导致饥饿，其中第一类会导致写者饥饿，第二类会导致读者饥饿。
+
+本次实验将实现第二类读写锁。
+
+>[Readers–writer lock - WIKIPEDIA]([https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock](https://en.wikipedia.org/wiki/Readers–writer_lock))
+
+### 使用Condition和Lock
+
+可以用一个[条件变量](https://en.wikipedia.org/wiki/Condition_variable)，*COND*，一个普通的（互斥）锁，g，和各种计数器和标志描述当前处于活动状态或等待的线程。对于写优先的RW锁，可以使用两个整数计数器和一个布尔标志：
+
+- *num_readers_active*：已获取锁的读者的数量（整数）
+- *num_writers_waiting*：等待访问的写者数（整数）
+- *writer_active*：写者是否已获得锁（布尔值）
+
+最初*num_readers_active*和*num_writers_waiting*为零，而*writer_active*为false。
+
+我将读写锁封装成一个类`code/threads/synch.h`：
+
+```cpp
+class RWLock
+{
+public:
+  RWLock(char *debugName);           // 构造函数
+  ~RWLock();                         // 析构函数
+  char *getName() { return (name); } // debug辅助
+
+  // 读者锁
+  void ReaderAcquire();
+  void ReaderRelease();
+  // 写者锁
+  void WriterAcquire();
+  void WriterRelease();
+
+private:
+  char *name;              // debug用
+  int num_readers_active;  //已获取锁的读者的数量
+  int num_writers_waiting; //等待访问的写者数（整数）
+  int writer_active;       //写者是否已获得锁（布尔值）
+  Condition *COND;         //条件变量COND
+  Lock *g;                 //互斥锁g
+};
+```
+
+#### 读者锁
+
+```cpp
+//Begin Read
+void RWLock::ReaderAcquire()
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //lock g
+    g->Acquire();
+    //writer first
+    while (num_writers_waiting > 0 || writer_active)
+        COND->Wait(g);
+    // increamnet number of readers
+    num_readers_active++;
+    //unlock g
+    g->Release();
+    interrupt->SetLevel(oldLevel);
+}
+
+//End Read
+void RWLock::ReaderRelease()
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //lock g
+    g->Acquire();
+    //no readers active, notify COND
+    if (!num_readers_active)
+        COND->Broadcast(g);
+    //unlock g
+    g->Release();
+    interrupt->SetLevel(oldLevel);
+}
+```
+
+#### 写者锁
+
+```cpp
+//Begin Write
+void RWLock::WriterAcquire()
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //lock g
+    g->Acquire();
+    // increamnet number of writers
+    num_writers_waiting++;
+    //writer first
+    while (num_readers_active > 0 || writer_active)
+        COND->Wait(g);
+    // decreamnet snumber of writers
+    num_writers_waiting--;
+    //set writer_active to true
+    writer_active = true;
+    //unlock g
+    g->Release();
+    interrupt->SetLevel(oldLevel);
+}
+
+//End Write
+void RWLock::WriterRelease()
+{
+     IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //lock g
+    g->Acquire();
+    //set writer_active to false
+    writer_active = false;
+    //notify COND
+    COND->Broadcast(g);
+    //unlock g
+    g->Release();
+    interrupt->SetLevel(oldLevel);
+}
+```
+
+其他琐碎的代码请查看`code/threads/synch.cc`
+
+### 测试
+
+在`code/threads/threatest.cc`中编写了Lab3RWLock()函数，testnum = 7：
+
+
+
+
+
+## *Challenge 3  研究Linux的kfifo机制是否可以移植到Nachos上作为一个新的同步模块。

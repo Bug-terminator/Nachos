@@ -42,8 +42,9 @@
 // 要分为两步：先分配直接
 // 索引，再分配一级索引。
 //----------------------------------------------------------------------
-bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
+bool FileHeader::Allocate(BitMap *freeMap, int fileSize, int tp)
 {
+    type = tp;
     numBytes = fileSize;
     numSectors = divRoundUp(fileSize, SectorSize);
     if (freeMap->NumClear() < numSectors)

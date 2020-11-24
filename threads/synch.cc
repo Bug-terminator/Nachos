@@ -100,7 +100,6 @@ void Semaphore::V()
 // Note -- without a correct implementation of Condition::Wait(),
 // the test case in the network assignment won't work!
 
-
 //----------------------------------------------------------------------
 // Lab3 Lock
 // Check my report for more information
@@ -145,10 +144,6 @@ bool Lock::isLocked()
 {
     return !semaphore->getValue();
 }
-
-
-
-
 
 //----------------------------------------------------------------------
 // Lab3 Condition
@@ -214,9 +209,6 @@ void Condition::Broadcast(Lock *conditionLock)
     interrupt->SetLevel(oldLevel);
 }
 
-
-
-
 //----------------------------------------------------------------------
 // Lab3 Barrier
 // Check my report for more information
@@ -245,14 +237,92 @@ void Barrier::stopAndWait()
     if (!remain)
     {
         DEBUG('b', "All threads reached %s.\n", name);
-        condition->Broadcast(mutex);//释放前n-1个线程
+        condition->Broadcast(mutex); //释放前n-1个线程
         //重置barrier
         remain = threadNum;
-        currentThread->Yield();//最后一个线程不能用wait，否则会导致所有线程阻塞，因此，用yeild()
-
+        currentThread->Yield(); //最后一个线程不能用wait，否则会导致所有线程阻塞，因此，用yeild()
     }
     else
-    condition->Wait(mutex);//阻塞当前线程
+        condition->Wait(mutex); //阻塞当前线程
     mutex->Release();
+    interrupt->SetLevel(oldLevel);
+}
+
+//----------------------------------------------------------------------
+// Lab3 RWLock
+// Check my report for more information
+//----------------------------------------------------------------------
+
+RWLock::RWLock(char *debugname)
+{
+    name = debugname;
+    g = new Lock("RWLock");
+    COND = new Condition("RWCOND");
+    num_readers_active = num_writers_waiting = 0;
+    writer_active = false;
+}
+
+//Begin Read
+void RWLock::ReaderAcquire()
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //lock g
+    g->Acquire();
+    //writer first
+    while (num_writers_waiting > 0 || writer_active)
+        COND->Wait(g);
+    // increamnet number of readers
+    num_readers_active++;
+    //unlock g
+    g->Release();
+    interrupt->SetLevel(oldLevel);
+}
+
+//End Read
+void RWLock::ReaderRelease()
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //lock g
+    g->Acquire();
+    //no readers active, notify COND
+    if (!num_readers_active)
+        COND->Broadcast(g);
+    //unlock g
+    g->Release();
+    interrupt->SetLevel(oldLevel);
+}
+
+//Begin Write
+void RWLock::WriterAcquire()
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //lock g
+    g->Acquire();
+    // increamnet number of writers
+    num_writers_waiting++;
+    //writer first
+    while (num_readers_active > 0 || writer_active)
+        COND->Wait(g);
+    // decreamnet snumber of writers
+    num_writers_waiting--;
+    //set writer_active to true
+    writer_active = true;
+    //unlock g
+    g->Release();
+    interrupt->SetLevel(oldLevel);
+}
+
+//End Write
+void RWLock::WriterRelease()
+{
+     IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    //lock g
+    g->Acquire();
+    //set writer_active to false
+    writer_active = false;
+    //notify COND
+    COND->Broadcast(g);
+    //unlock g
+    g->Release();
     interrupt->SetLevel(oldLevel);
 }

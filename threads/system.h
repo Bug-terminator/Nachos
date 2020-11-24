@@ -19,6 +19,7 @@
 #include "timer.h"
 #include <iostream>
 #include <vector>
+#include <string>
 using namespace std;
 //新增
 extern Thread *threadPtr[];
