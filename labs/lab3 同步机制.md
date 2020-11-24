@@ -645,6 +645,86 @@ void RWLock::WriterRelease()
 
 在`code/threads/threatest.cc`中编写了Lab3RWLock()函数，testnum = 7：
 
+```cpp
+//----------------------------------------------------------------------
+// lab3 Challenge1 RWLock
+// 随机产生一定数量的读者和写者
+// 对临界资源buffer进行读写；
+// 写者的任务：写一句拿破仑的名言
+// "Victory belongs to the most persevering"
+// 直到写者写完为止
+//----------------------------------------------------------------------
+
+#define THREADNUM_R (Random() % 4 + 1)                           //读者数,不超过4
+#define THREADNUM_W (Random() % 4 + 1)                           //写者数,不超过4
+const string QUOTE = "Victory belongs to the most persevering."; //拿破仑的名言
+const int QUOTE_SIZE = QUOTE.size();                             //长度
+int shared_i = 0;                                                //写者公用，用于定位，初始化为零
+Lock *lock_i;                                                    //shared_i的锁
+RWLock *rwlock;                                                  //读写锁
+string buffer;                                                   //buffer
+
+//写者线程
+void Writer(int dummy)
+{
+    while (shared_i < QUOTE_SIZE)
+    {
+        rwlock->WriterAcquire();
+        lock_i->Acquire();
+        buffer.push_back(QUOTE[shared_i++]);
+        printf("%s has wrote a char to buffer: %s", currentThread->getName(), buffer);
+        lock_i->Release();
+        rwlock->WriterRelease();
+        currentThread->Yield();
+    }
+}
+
+//读者线程
+void Reader(int dummy)
+{
+    while (shared_i < QUOTE_SIZE)
+    {
+        rwlock->ReaderAcquire();
+        printf("%s", buffer);
+        rwlock->ReaderRelease();
+        currentThread->Yield();
+    }
+}
+
+void Lab3RWLock()
+{
+    printf("Random created %d readers, %d writers.\n", THREADNUM_R, THREADNUM_W);
+
+    rwlock = new RWLock("RWLock"); //初始化rwlock
+    lock_i = new Lock("Lock_i");   //初始化lock_i
+    Thread *threadReader[THREADNUM_R];
+    Thread *threadWriter[THREADNUM_W];
+
+    //初始化写者
+    for (int i = 0; i < THREADNUM_W; ++i)
+    {
+        char threadName[20];
+        sprintf(threadName, "Writer %d", i); //给线程命名
+        threadWriter[i] = new Thread(strdup(threadName));
+        threadWriter[i]->Fork(Writer, 0);
+    }
+    //初始化读者
+    for (int i = 0; i < THREADNUM_R; ++i)
+    {
+        char threadName[20];
+        sprintf(threadName, "Reader %d", i); //给线程命名
+        threadReader[i] = new Thread(strdup(threadName));
+        threadReader[i]->Fork(Reader, 0);
+    }
+
+    while (!scheduler->isEmpty())
+        currentThread->Yield(); //跳过main的执行
+
+    //结束
+    printf("Producer consumer test Finished.\n");
+}
+```
+
 
 
 
