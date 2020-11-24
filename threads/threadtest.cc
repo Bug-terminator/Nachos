@@ -149,7 +149,7 @@ void timeSlicingTest()
 #define BUFFER_SIZE 5                  //buffer的大小
 #define THREADNUM_P (Random() % 4 + 1) //生产者数,不超过4
 #define THREADNUM_C (Random() % 4 + 1) //消费者数,不超过4
-#define TESTTIME 1500                  //本次测试的总时间
+#define TESTTIME 500                   //本次测试的总时间
 
 vector<char> buffer;     //方便起见，用STL作为buffer
 Lock *mutex;             //mutex->缓冲区的互斥访问
@@ -162,10 +162,10 @@ void Comsumer(int dummy)
     {
         //保证对缓冲区的互斥访问
         mutex->Acquire();
-        //缓冲区孔，阻塞当前消费者
-        if (!buffer.size())
+        //缓冲区空，阻塞当前消费者
+        while (!buffer.size())
         {
-            printf("Buffer is empty with size %d.\n", buffer.size());
+            printf("Thread \"%s\": Buffer is empty with size %d.\n", currentThread->getName(), buffer.size());
             empty->Wait(mutex);
         }
 
@@ -192,10 +192,12 @@ void Producer(int dummy)
         //保证对缓冲区的互斥访问
         mutex->Acquire();
 
-        //缓冲区满，阻塞当前线程
-        if (buffer.size() == BUFFER_SIZE)
+        //缓冲区满，阻塞当前线程,一定要使用while,如果用if，可能存在
+        //这样一种情况:生产者1判断buffer满，阻塞；当它再次上处理机时，
+        //buffer还是满的，但是它不会再判断了，而是直接进入了临界区
+        while (buffer.size() == BUFFER_SIZE)
         {
-            printf("Buffer is full with size %d.\n", buffer.size());
+            printf("Thread \"%s\": Buffer is full with size %d.\n", currentThread->getName(), buffer.size());
             full->Wait(mutex);
         }
 
@@ -210,6 +212,7 @@ void Producer(int dummy)
 
         //释放锁
         mutex->Release();
+
         interrupt->OneTick(); //系统时间自增
     }
 }
@@ -240,11 +243,12 @@ void Lab3ProducerAndComsumer()
         threadProducer[i] = new Thread(strdup(threadName));
         threadProducer[i]->Fork(Producer, 0);
     }
+    // scheduler->Print();
     while (!scheduler->isEmpty())
         currentThread->Yield(); //跳过main的执行
 
     //结束
-    printf("Producer consumer test Finished.\n");
+    printf("Reader writer test Finished.\n");
 }
 
 //----------------------------------------------------------------------
@@ -267,6 +271,9 @@ void AssignValue(int i) //i代表数组线标
     {
         num[i] = j;
         printf("Phase %d: thread \"%s\" finished assignment, num[%d] = %d.\n", j, currentThread->getName(), i, j);
+        //多次增加时间片，使线程切换更频繁
+        for (int i = 0; i < 4; ++i)
+            interrupt->OneTick();
         barrier->stopAndWait(); //线程暂时被barrier阻塞，并等待所有线程抵达
     }
 }
@@ -291,7 +298,7 @@ void Lab3Barrier()
 }
 
 //----------------------------------------------------------------------
-// lab3 Challenge1 RWLock
+// lab3 Challenge2 RWLock
 // 随机产生一定数量的读者和写者
 // 对临界资源buffer进行读写；
 // 写者的任务：写一句拿破仑的名言
@@ -304,23 +311,19 @@ void Lab3Barrier()
 const string QUOTE = "Victory belongs to the most persevering."; //拿破仑的名言
 const int QUOTE_SIZE = QUOTE.size();                             //长度
 int shared_i = 0;                                                //写者公用，用于定位，初始化为零
-Lock *lock_i;                                                    //shared_i的锁
 RWLock *rwlock;                                                  //读写锁
-string buffer;                                                   //buffer
+string RWBuffer;                                                 //buffer
 
 //写者线程
 void Writer(int dummy)
 {
-    while (shared_i < QUOTE_SIZE)
-    {
+    
         rwlock->WriterAcquire();
-        lock_i->Acquire();
-        buffer.push_back(QUOTE[shared_i++]);
-        printf("%s has wrote a char to buffer: %s", currentThread->getName(), buffer);
-        lock_i->Release();
+        RWBuffer.push_back(QUOTE[shared_i++]);
+        printf("%s is writing: %s\n", currentThread->getName(), RWBuffer.c_str());
         rwlock->WriterRelease();
-        currentThread->Yield();
-    }
+        interrupt->OneTick();
+    
 }
 
 //读者线程
@@ -329,9 +332,9 @@ void Reader(int dummy)
     while (shared_i < QUOTE_SIZE)
     {
         rwlock->ReaderAcquire();
-        printf("%s", buffer);
+        printf("%s is reading :%s\n", currentThread->getName(), RWBuffer.c_str());
         rwlock->ReaderRelease();
-        currentThread->Yield();
+        interrupt->OneTick();
     }
 }
 
@@ -340,7 +343,6 @@ void Lab3RWLock()
     printf("Random created %d readers, %d writers.\n", THREADNUM_R, THREADNUM_W);
 
     rwlock = new RWLock("RWLock"); //初始化rwlock
-    lock_i = new Lock("Lock_i");   //初始化lock_i
     Thread *threadReader[THREADNUM_R];
     Thread *threadWriter[THREADNUM_W];
 

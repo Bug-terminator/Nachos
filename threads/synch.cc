@@ -255,9 +255,10 @@ void Barrier::stopAndWait()
 
 RWLock::RWLock(char *debugname)
 {
+    DEBUG('R', "initilizing RWLock.\n");//R-RWLock
     name = debugname;
     g = new Lock("RWLock");
-    COND = new Condition("RWCOND");
+    COND = new Condition("Condition");
     num_readers_active = num_writers_waiting = 0;
     writer_active = false;
 }
@@ -284,6 +285,8 @@ void RWLock::ReaderRelease()
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     //lock g
     g->Acquire();
+    //decreament number of readers
+    num_readers_active--;
     //no readers active, notify COND
     if (!num_readers_active)
         COND->Broadcast(g);

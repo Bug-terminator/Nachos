@@ -180,11 +180,10 @@ void Condition::Broadcast(Lock *conditionLock)
 // buff满,生产者阻塞，buff空，消费者阻塞
 // 保证生产者和消费者互斥访问buffer
 //----------------------------------------------------------------------
-
 #define BUFFER_SIZE 5                  //buffer的大小
 #define THREADNUM_P (Random() % 4 + 1) //生产者数,不超过4
 #define THREADNUM_C (Random() % 4 + 1) //消费者数,不超过4
-#define TESTTIME 1500                  //本次测试的总时间
+#define TESTTIME 500                   //本次测试的总时间
 
 vector<char> buffer;     //方便起见，用STL作为buffer
 Lock *mutex;             //mutex->缓冲区的互斥访问
@@ -197,10 +196,10 @@ void Comsumer(int dummy)
     {
         //保证对缓冲区的互斥访问
         mutex->Acquire();
-        //缓冲区孔，阻塞当前消费者
-        if (!buffer.size())
+        //缓冲区空，阻塞当前消费者
+        while (!buffer.size())
         {
-            printf("Buffer is empty with size %d.\n", buffer.size());
+            printf("Thread \"%s\": Buffer is empty with size %d.\n", currentThread->getName(), buffer.size());
             empty->Wait(mutex);
         }
 
@@ -227,10 +226,12 @@ void Producer(int dummy)
         //保证对缓冲区的互斥访问
         mutex->Acquire();
 
-        //缓冲区满，阻塞当前线程
-        if (buffer.size() == BUFFER_SIZE)
+        //缓冲区满，阻塞当前线程,一定要使用while,如果用if，可能存在
+        //这样一种情况:生产者1判断buffer满，阻塞；当它再次上处理机时，
+        //buffer还是满的，但是它不会再判断了，而是直接进入了临界区
+        while (buffer.size() == BUFFER_SIZE)
         {
-            printf("Buffer is full with size %d.\n", buffer.size());
+            printf("Thread \"%s\": Buffer is full with size %d.\n", currentThread->getName(), buffer.size());
             full->Wait(mutex);
         }
 
@@ -275,6 +276,7 @@ void Lab3ProducerAndComsumer()
         threadProducer[i] = new Thread(strdup(threadName));
         threadProducer[i]->Fork(Producer, 0);
     }
+    // scheduler->Print();
     while (!scheduler->isEmpty())
         currentThread->Yield(); //跳过main的执行
 
@@ -283,90 +285,48 @@ void Lab3ProducerAndComsumer()
 }
 ```
 
-在terminal中输入`./nachos -d c -q 6`可查看结果：
+### 测试
 
-> c means condition
+本次试验采用随机时间片模拟真实场景，在terminal中输入`./nachos -d c -rs -q 6`可查看结果：
+
+> -d c means condition debug, -rs means random seed
 
 ```shell
-vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ ./nachos -d c -q 6
-Random created 3 comsumers, 4 producers.
-Buffer is empty with size 0.
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ ./nachos -d c -rs -q 6
+Random created 2 comsumers, 3 producers.
+Thread "Comsumer 0": Buffer is empty with size 0.
 Empty_condition has blocked thread "Comsumer 0".
-Buffer is empty with size 0.
+Thread "Comsumer 1": Buffer is empty with size 0.
 Empty_condition has blocked thread "Comsumer 1".
-Buffer is empty with size 0.
-Empty_condition has blocked thread "Comsumer 2".
 Thread "Producer 0" puts an item.
 Empty_condition wakes up "Comsumer 0".
 Thread "Producer 0" puts an item.
-Thread "Producer 0" puts an item.
-Thread "Producer 0" puts an item.
-Thread "Producer 0" puts an item.
-Buffer is full with size 5.
-Full_condition has blocked thread "Producer 0".
-Buffer is full with size 5.
-Full_condition has blocked thread "Producer 1".
-Buffer is full with size 5.
+======Random context switch, Ticks = 190=====
+Thread "Producer 1" puts an item.
+Thread "Producer 1" puts an item.
+======Random context switch, Ticks = 250=====
+Thread "Producer 2" puts an item.
+Thread "Producer 2": Buffer is full with size 5.
 Full_condition has blocked thread "Producer 2".
-Buffer is full with size 5.
+Thread "Producer 3": Buffer is full with size 5.
 Full_condition has blocked thread "Producer 3".
 Thread "Comsumer 0" gets an item.
-Full_condition wakes up "Producer 0".
-Thread "Comsumer 0" gets an item.
-Thread "Comsumer 0" gets an item.
-Thread "Comsumer 0" gets an item.
-Thread "Comsumer 0" gets an item.
-Buffer is empty with size 0.
-Empty_condition has blocked thread "Comsumer 0".
-Thread "Producer 0" puts an item.
-Empty_condition wakes up "Comsumer 1".
-Thread "Producer 0" puts an item.
-Thread "Producer 0" puts an item.
-Thread "Producer 0" puts an item.
-Thread "Producer 0" puts an item.
-Buffer is full with size 5.
-Full_condition has blocked thread "Producer 0".
-Thread "Comsumer 1" gets an item.
-Full_condition wakes up "Producer 1".
-Thread "Comsumer 1" gets an item.
-Thread "Comsumer 1" gets an item.
-Thread "Comsumer 1" gets an item.
-Thread "Comsumer 1" gets an item.
-Buffer is empty with size 0.
-Empty_condition has blocked thread "Comsumer 1".
-Thread "Producer 1" puts an item.
-Empty_condition wakes up "Comsumer 2".
-Thread "Producer 1" puts an item.
-Thread "Producer 1" puts an item.
-Thread "Producer 1" puts an item.
-Thread "Producer 1" puts an item.
-Buffer is full with size 5.
-Full_condition has blocked thread "Producer 1".
-Thread "Comsumer 2" gets an item.
 Full_condition wakes up "Producer 2".
-Thread "Comsumer 2" gets an item.
-Thread "Comsumer 2" gets an item.
-Thread "Comsumer 2" gets an item.
-Thread "Comsumer 2" gets an item.
-Buffer is empty with size 0.
-Empty_condition has blocked thread "Comsumer 2".
-Thread "Producer 2" puts an item.
-Empty_condition wakes up "Comsumer 0".
-Thread "Producer 2" puts an item.
-Thread "Producer 2" puts an item.
-Thread "Producer 2" puts an item.
-Thread "Producer 2" puts an item.
-Buffer is full with size 5.
-Full_condition has blocked thread "Producer 2".
 Thread "Comsumer 0" gets an item.
-Full_condition wakes up "Producer 3".
-Thread "Producer 3" puts an item.
+Thread "Comsumer 0" gets an item.
+======Random context switch, Ticks = 420=====
+Thread "Producer 0" puts an item.
+Thread "Producer 0" puts an item.
+Thread "Producer 0" puts an item.
+======Random context switch, Ticks = 550=====
+Thread "Producer 2": Buffer is full with size 5.
+Full_condition has blocked thread "Producer 2".
 Producer consumer test Finished.
 No threads ready or runnable, and no pending interrupts.
 Assuming the program completed.
 Machine halting!
 
-Ticks: total 1560, idle 0, system 1560, user 0
+Ticks: total 691, idle 101, system 590, user 0
 Disk I/O: reads 0, writes 0
 Console I/O: reads 0, writes 0
 Paging: faults 0
@@ -377,7 +337,7 @@ Cleaning up...
 
 ### 结论
 
-结果显示，成功实现了多生产者消费者对于buffer的互斥访问，并使用了semaphore和condition，满足题目要求。
+结果显示，成功使用semaphore和condition解决生产者消费者问题。
 
 ## *challenge1 Barrier 
 
@@ -428,7 +388,51 @@ Barrier *barrier;
 
 //为每个变量赋值，变量与线程一一对应
 void assignValue(int i)//i代表数组下标
+{//----------------------------------------------------------------------
+// lab3 Challenge1 Barrier
+// new 4 个线程，每个线程分别对4个全局变量进行赋值
+// 共分三个阶段,每个阶段赋值不同，但是在相同的阶段中，
+// 每个线程对对应的数组元素赋值是相同的
+//----------------------------------------------------------------------
+
+#define THREADNUM 4 //线程数
+#define PHASENUM 3  //测试的阶段数
+int num[THREADNUM];
+Barrier *barrier;
+
+//为每个变量赋值，变量与线程一一对应
+void AssignValue(int i) //i代表数组线标
 {
+    //每个循环代表一个阶段
+    for (int j = 1; j <= PHASENUM; ++j)
+    {
+        num[i] = j;
+        printf("Phase %d: thread \"%s\" finished assignment, num[%d] = %d.\n", j, currentThread->getName(), i, j);
+        //多次增加时间片，使得线程切换更频繁（随机时间片使用）
+        for (int i = 0; i < 4; ++i)
+            interrupt->OneTick();
+        barrier->stopAndWait(); //线程暂时被barrier阻塞，并等待所有线程抵达
+    }
+}
+
+void Lab3Barrier()
+{
+    barrier = new Barrier("barrier", THREADNUM);
+    Thread *threads[THREADNUM];
+    //初始化线程和数组,并加入就绪队列
+    for (int i = 0; i < THREADNUM; ++i)
+    {
+        num[i] = 0;
+        char threadName[30];
+        sprintf(threadName, "Barrier test %d", i); //给线程命名
+        threads[i] = new Thread(strdup(threadName));
+        threads[i]->Fork(AssignValue, i);
+    }
+    while (!scheduler->isEmpty())
+        currentThread->Yield(); //跳过main的执行
+    //结束
+    printf("Barrier test Finished.\n");
+}
   //每个循环代表一个阶段
     for (int j = 1; j <= PHASENUM; ++j)
     {
@@ -465,7 +469,7 @@ void Lab3Barrier()
 
 在`terminal`中输入`./nachos -d b -q 5`可查看结果：
 
-> b代表barrier
+> -d b means barrier debug
 
 ```shell
 vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ ./nachos -d b -q 5
@@ -510,9 +514,57 @@ Network I/O: packets received 0, sent 0
 Cleaning up...
 ```
 
+结果显示，共进行了三个阶段的赋值，每个阶段中，每个线程正确地对其负责的变量进行了赋值；在不同的阶段中，每个线程的赋值不同，符合预期，实验成功。为了测试在随机时间片下程序是否具有正确性，输入-rs 查看随机时间片下的结果：
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ make;./nachos -d c -rs -q 5
+make: `nachos' is up to date.
+Phase 1: thread "Barrier test 0" finished assignment, num[0] = 1.
+Barrier condition has blocked thread "Barrier test 0".
+Phase 1: thread "Barrier test 1" finished assignment, num[1] = 1.
+Barrier condition has blocked thread "Barrier test 1".
+Phase 1: thread "Barrier test 2" finished assignment, num[2] = 1.
+===============Random context switch, Ticks = 190===============
+Phase 1: thread "Barrier test 3" finished assignment, num[3] = 1.
+Barrier condition has blocked thread "Barrier test 3".
+broadcast : Barrier test 0      Barrier test 1  Barrier test 3
+===============Random context switch, Ticks = 280===============
+Phase 2: thread "Barrier test 2" finished assignment, num[2] = 2.
+Barrier condition has blocked thread "Barrier test 2".
+Phase 2: thread "Barrier test 0" finished assignment, num[0] = 2.
+Barrier condition has blocked thread "Barrier test 0".
+Phase 2: thread "Barrier test 1" finished assignment, num[1] = 2.
+Barrier condition has blocked thread "Barrier test 1".
+===============Random context switch, Ticks = 460===============
+Phase 2: thread "Barrier test 3" finished assignment, num[3] = 2.
+broadcast : Barrier test 2      Barrier test 0  Barrier test 1
+Phase 3: thread "Barrier test 3" finished assignment, num[3] = 3.
+===============Random context switch, Ticks = 580===============
+Phase 3: thread "Barrier test 2" finished assignment, num[2] = 3.
+Barrier condition has blocked thread "Barrier test 2".
+Barrier condition has blocked thread "Barrier test 3".
+Phase 3: thread "Barrier test 0" finished assignment, num[0] = 3.
+Barrier condition has blocked thread "Barrier test 0".
+Phase 3: thread "Barrier test 1" finished assignment, num[1] = 3.
+broadcast : Barrier test 2      Barrier test 3  Barrier test 0
+===============Random context switch, Ticks = 780===============
+Barrier test Finished.
+No threads ready or runnable, and no pending interrupts.
+Assuming the program completed.
+Machine halting!
+
+Ticks: total 916, idle 56, system 860, user 0
+Disk I/O: reads 0, writes 0
+Console I/O: reads 0, writes 0
+Paging: faults 0
+Network I/O: packets received 0, sent 0
+
+Cleaning up...
+```
+
 ### 结论
 
-共进行了三个阶段的赋值，每个阶段中，每个线程正确地对其负责的变量进行了赋值；在不同的阶段中，每个线程的赋值不同，符合预期，实验成功。
+在随机时间片下结果依然正确，我们的Barrier实现成功！
 
 ## *Challenge2 实现read/write lock
 
@@ -527,7 +579,7 @@ Cleaning up...
 
 本次实验将实现第二类读写锁。
 
->[Readers–writer lock - WIKIPEDIA]([https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock](https://en.wikipedia.org/wiki/Readers–writer_lock))
+>[Readers–writer lock - WIKIPEDIA](https://en.wikipedia.org/wiki/Readers–writer_lock))
 
 ### 使用Condition和Lock
 
@@ -591,6 +643,8 @@ void RWLock::ReaderRelease()
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     //lock g
     g->Acquire();
+  	//decrement number of readers
+  	num_reader_active--;
     //no readers active, notify COND
     if (!num_readers_active)
         COND->Broadcast(g);
@@ -647,7 +701,7 @@ void RWLock::WriterRelease()
 
 ```cpp
 //----------------------------------------------------------------------
-// lab3 Challenge1 RWLock
+// lab3 Challenge2 RWLock
 // 随机产生一定数量的读者和写者
 // 对临界资源buffer进行读写；
 // 写者的任务：写一句拿破仑的名言
@@ -660,9 +714,7 @@ void RWLock::WriterRelease()
 const string QUOTE = "Victory belongs to the most persevering."; //拿破仑的名言
 const int QUOTE_SIZE = QUOTE.size();                             //长度
 int shared_i = 0;                                                //写者公用，用于定位，初始化为零
-Lock *lock_i;                                                    //shared_i的锁
-RWLock *rwlock;                                                  //读写锁
-string buffer;                                                   //buffer
+string RWBuffer;                                                 //buffer
 
 //写者线程
 void Writer(int dummy)
@@ -670,12 +722,10 @@ void Writer(int dummy)
     while (shared_i < QUOTE_SIZE)
     {
         rwlock->WriterAcquire();
-        lock_i->Acquire();
-        buffer.push_back(QUOTE[shared_i++]);
-        printf("%s has wrote a char to buffer: %s", currentThread->getName(), buffer);
-        lock_i->Release();
+        RWBuffer.push_back(QUOTE[shared_i++]);
+        printf("%s is writing: %s\n", currentThread->getName(), RWBuffer.c_str());
         rwlock->WriterRelease();
-        currentThread->Yield();
+        interrupt->OneTick();
     }
 }
 
@@ -685,9 +735,9 @@ void Reader(int dummy)
     while (shared_i < QUOTE_SIZE)
     {
         rwlock->ReaderAcquire();
-        printf("%s", buffer);
+        printf("%s is reading :%s\n", currentThread->getName(), RWBuffer.c_str());
         rwlock->ReaderRelease();
-        currentThread->Yield();
+        interrupt->OneTick();
     }
 }
 
@@ -696,7 +746,6 @@ void Lab3RWLock()
     printf("Random created %d readers, %d writers.\n", THREADNUM_R, THREADNUM_W);
 
     rwlock = new RWLock("RWLock"); //初始化rwlock
-    lock_i = new Lock("Lock_i");   //初始化lock_i
     Thread *threadReader[THREADNUM_R];
     Thread *threadWriter[THREADNUM_W];
 
@@ -723,6 +772,174 @@ void Lab3RWLock()
     //结束
     printf("Producer consumer test Finished.\n");
 }
+```
+
+在terminal中输入`./nachos  -rs -q 7`可查看结果：
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ make;./nachos  -rs -q 7
+make: `nachos' is up to date.
+Random created 4 readers, 2 writers.
+Writer 0 is writing: V
+Writer 0 is writing: Vi
+Writer 0 is writing: Vic
+Writer 0 is writing: Vict
+===============Random context switch, Ticks = 190===============
+Ready list contents:
+Writer 1, Reader 0, Reader 1, Reader 2, Reader 3, main,
+Writer 1 is writing: Victo
+Writer 1 is writing: Victor
+===============Random context switch, Ticks = 250===============
+Ready list contents:
+Reader 0, Reader 1, Reader 2, Reader 3, main, Writer 0,
+Reader 0 is reading :Victor
+Reader 0 is reading :Victor
+Reader 0 is reading :Victor
+Reader 0 is reading :Victor
+Reader 0 is reading :Victor
+===============Random context switch, Ticks = 420===============
+Ready list contents:
+Reader 1, Reader 2, Reader 3, main, Writer 0, Writer 1,
+Reader 1 is reading :Victor
+Reader 1 is reading :Victor
+Reader 1 is reading :Victor
+Reader 1 is reading :Victor
+===============Random context switch, Ticks = 550===============
+Ready list contents:
+Reader 2, Reader 3, main, Writer 0, Writer 1, Reader 0,
+Reader 2 is reading :Victor
+Reader 2 is reading :Victor
+Reader 2 is reading :Victor
+Reader 2 is reading :Victor
+Reader 2 is reading :Victor
+===============Random context switch, Ticks = 700===============
+Ready list contents:
+Reader 3, main, Writer 0, Writer 1, Reader 0, Reader 1,
+Reader 3 is reading :Victor
+===============Random context switch, Ticks = 730===============
+Ready list contents:
+main, Writer 0, Writer 1, Reader 0, Reader 1, Reader 2,
+Reader 0 is reading :Victor
+Writer 0 is writing: Victory
+===============Random context switch, Ticks = 910===============
+Ready list contents:
+Writer 1, main, Reader 0, Reader 1, Reader 2, Reader 3,
+Writer 0 is writing: Victory
+Writer 0 is writing: Victory b
+Writer 0 is writing: Victory be
+Writer 0 is writing: Victory bel
+===============Random context switch, Ticks = 1050===============
+Ready list contents:
+main, Writer 1, Reader 0, Reader 1, Reader 2, Reader 3,
+===============Random context switch, Ticks = 1070===============
+Ready list contents:
+main,
+Writer 0 is writing: Victory belo
+Writer 0 is writing: Victory belon
+Writer 0 is writing: Victory belong
+Writer 0 is writing: Victory belongs
+Writer 0 is writing: Victory belongs
+===============Random context switch, Ticks = 1240===============
+Ready list contents:
+main, Writer 1, Reader 0, Reader 1, Reader 2, Reader 3,
+Writer 0 is writing: Victory belongs t
+Writer 0 is writing: Victory belongs to
+Writer 0 is writing: Victory belongs to
+Writer 0 is writing: Victory belongs to t
+Writer 0 is writing: Victory belongs to th
+===============Random context switch, Ticks = 1410===============
+Ready list contents:
+main, Writer 1, Reader 0, Reader 1, Reader 2, Reader 3,
+Writer 0 is writing: Victory belongs to the
+===============Random context switch, Ticks = 1440===============
+Ready list contents:
+main, Writer 1, Reader 0, Reader 1, Reader 2, Reader 3,
+Writer 1 is writing: Victory belongs to the
+Writer 1 is writing: Victory belongs to the m
+Writer 1 is writing: Victory belongs to the mo
+Writer 1 is writing: Victory belongs to the mos
+Writer 1 is writing: Victory belongs to the most
+Writer 1 is writing: Victory belongs to the most
+===============Random context switch, Ticks = 1630===============
+Ready list contents:
+Reader 0, Reader 1, Reader 2, Reader 3, Writer 0, main,
+Reader 0 is reading :Victory belongs to the most
+Reader 0 is reading :Victory belongs to the most
+Reader 0 is reading :Victory belongs to the most
+Reader 0 is reading :Victory belongs to the most
+Reader 0 is reading :Victory belongs to the most
+===============Random context switch, Ticks = 1770===============
+Ready list contents:
+Reader 1, Reader 2, Reader 3, Writer 0, main, Writer 1,
+Reader 1 is reading :Victory belongs to the most
+Reader 1 is reading :Victory belongs to the most
+===============Random context switch, Ticks = 1840===============
+Ready list contents:
+Reader 2, Reader 3, Writer 0, main, Writer 1, Reader 0,
+Reader 2 is reading :Victory belongs to the most
+Reader 2 is reading :Victory belongs to the most
+Reader 2 is reading :Victory belongs to the most
+Reader 2 is reading :Victory belongs to the most
+===============Random context switch, Ticks = 1970===============
+Ready list contents:
+Reader 3, Writer 0, main, Writer 1, Reader 0, Reader 1,
+Reader 3 is reading :Victory belongs to the most
+Reader 3 is reading :Victory belongs to the most
+===============Random context switch, Ticks = 2040===============
+Ready list contents:
+Writer 0, main, Writer 1, Reader 0, Reader 1, Reader 2,
+Reader 1 is reading :Victory belongs to the most
+Reader 2 is reading :Victory belongs to the most
+Reader 3 is reading :Victory belongs to the most
+===============Random context switch, Ticks = 2180===============
+Ready list contents:
+main, Writer 0, Writer 1, Reader 0, Reader 1, Reader 2,
+Writer 0 is writing: Victory belongs to the most p
+Writer 0 is writing: Victory belongs to the most pe
+Writer 0 is writing: Victory belongs to the most per
+Writer 0 is writing: Victory belongs to the most pers
+===============Random context switch, Ticks = 2310===============
+Ready list contents:
+Writer 1, Reader 0, Reader 1, Reader 2, Reader 3, main,
+===============Random context switch, Ticks = 2320===============
+Ready list contents:
+Reader 0, Reader 1, Reader 2, Reader 3, main, Writer 0,
+===============Random context switch, Ticks = 2350===============
+Ready list contents:
+Writer 0, Writer 1,
+Writer 1 is writing: Victory belongs to the most perse
+Writer 1 is writing: Victory belongs to the most persev
+===============Random context switch, Ticks = 2410===============
+Ready list contents:
+main, Reader 0, Reader 1, Reader 2, Reader 3, Writer 0,
+Writer 0 is writing: Victory belongs to the most perseve
+Writer 0 is writing: Victory belongs to the most persever
+===============Random context switch, Ticks = 2480===============
+Ready list contents:
+Writer 1, main, Reader 0, Reader 1, Reader 2, Reader 3,
+Writer 1 is writing: Victory belongs to the most perseveri
+Writer 1 is writing: Victory belongs to the most perseverin
+Writer 1 is writing: Victory belongs to the most persevering
+Writer 1 is writing: Victory belongs to the most persevering.
+Reader 0 is reading :Victory belongs to the most persevering.
+===============Random context switch, Ticks = 2650===============
+Ready list contents:
+Reader 1, Reader 2, Reader 3, Writer 0, main,
+Reader 1 is reading :Victory belongs to the most persevering.
+Reader 2 is reading :Victory belongs to the most persevering.
+Reader 3 is reading :Victory belongs to the most persevering.
+Producer consumer test Finished.
+No threads ready or runnable, and no pending interrupts.
+Assuming the program completed.
+Machine halting!
+
+Ticks: total 2844, idle 54, system 2790, user 0
+Disk I/O: reads 0, writes 0
+Console I/O: reads 0, writes 0
+Paging: faults 0
+Network I/O: packets received 0, sent 0
+
+Cleaning up...
 ```
 
 

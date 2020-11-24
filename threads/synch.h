@@ -180,7 +180,7 @@ private:
   int num_readers_active;  //已获取锁的读者的数量
   int num_writers_waiting; //等待访问的写者数（整数）
   int writer_active;       //写者是否已获得锁（布尔值）
-  Condition *COND;         //条件变量COND
+  Condition *COND;         //条件变量
   Lock *g;                 //互斥锁g
 };
 

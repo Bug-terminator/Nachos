@@ -71,7 +71,7 @@ extern void Cleanup();
 static void
 TimerInterruptHandler(int dummy)
 {
-    DEBUG('c', " << random Context Switch (stats->totalTicks = %d) >>\n", stats->totalTicks);
+    // DEBUG('c', " << random Context Switch (stats->totalTicks = %d) >>\n", stats->totalTicks);
     if (interrupt->getStatus() != IdleMode)
     {
 #ifdef ROUND_ROBIN //时间片轮转
@@ -87,6 +87,8 @@ TimerInterruptHandler(int dummy)
                 interrupt->YieldOnReturn();
             }
 #else //原始版本
+        printf("===============Random context switch, Ticks = %d===============\n",stats->totalTicks);
+        scheduler->Print();
         interrupt->YieldOnReturn();
 #endif
     }
