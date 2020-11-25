@@ -43,7 +43,7 @@ Thread::Thread(char *threadname)
     space = NULL;
 #endif
 }
-#ifdef LAB1
+
 //lab1 实现优先级抢占调度算法和时间片轮转算法
 Thread::Thread(char *threadName, int pr)
 {
@@ -73,7 +73,7 @@ Thread::Thread(char *threadName, int pr)
     space = NULL;
 #endif
 }
-#endif
+
 //----------------------------------------------------------------------
 // Thread::~Thread
 // 	De-allocate a thread.

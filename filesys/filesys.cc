@@ -306,60 +306,60 @@ bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp)
     return success;
 }
 
-//原始版本
-// bool FileSystem::Create(char *path, int initialSize)
-// {
-//     Directory *directory;
-//     BitMap *freeMap;
-//     FileHeader *hdr;
-//     int sector;
-//     bool success;
+// 原始版本
+bool FileSystem::Create(char *name, int initialSize)
+{
+    Directory *directory;
+    BitMap *freeMap;
+    FileHeader *hdr;
+    int sector;
+    bool success;
 
-//     DEBUG('f', "Creating file %s, size %d\n", path, initialSize);
+    DEBUG('f', "Creating file %s, size %d\n", name, initialSize);
 
-//     //将根目录读入内存
-//     directory = new Directory(NumDirEntries);
-//     directory->FetchFrom(directoryFile);
+    //将根目录读入内存
+    directory = new Directory(NumDirEntries);
+    directory->FetchFrom(directoryFile);
 
-//     if (directory->Find(name) != -1)
-//         success = FALSE;
-//     else
-//     {
-//         freeMap = new BitMap(NumSectors);
-//         freeMap->FetchFrom(freeMapFile);
-//         sector = freeMap->Find();
-//         if (sector == -1)
-//             success = FALSE;
+    if (directory->Find(name) != -1)
+        success = FALSE;
+    else
+    {
+        freeMap = new BitMap(NumSectors);
+        freeMap->FetchFrom(freeMapFile);
+        sector = freeMap->Find();
+        if (sector == -1)
+            success = FALSE;
 
-//         //查dir，找到空闲项，将新的inode插入，我感觉这里有bug，存在这样一种情况：
-//         //先将新的dirEntry插入了dir，然后在下面的inode初始化中失败了，这样就多了一个无用的表项。
-//         //11:21更新，不会，因为出错时不会writeback，磁盘中的信息没变。
-//         else if (!directory->Add(name, sector))
-//             success = FALSE;
-//         else
-//         {
-//             //构造新的i-node，并分配初始化inode
-//             hdr = new FileHeader;
-//             if (!hdr->Allocate(freeMap, initialSize))
-//                 success = FALSE; // no space on disk for data
-//             else
-//             {
-//                 success = TRUE;
+        //查dir，找到空闲项，将新的inode插入，我感觉这里有bug，存在这样一种情况：
+        //先将新的dirEntry插入了dir，然后在下面的inode初始化中失败了，这样就多了一个无用的表项。
+        //11:21更新，不会，因为出错时不会writeback，磁盘中的信息没变。
+        else if (!directory->Add(name, sector))
+            success = FALSE;
+        else
+        {
+            //构造新的i-node，并分配初始化inode
+            hdr = new FileHeader;
+            if (!hdr->Allocate(freeMap, initialSize, NORM))
+                success = FALSE; // no space on disk for data
+            else
+            {
+                success = TRUE;
 
-//                 // 将inode写回磁盘
-//                 hdr->WriteBack(sector);
+                // 将inode写回磁盘
+                hdr->WriteBack(sector);
 
-//                 //更新磁盘中的目录和bitmap
-//                 directory->WriteBack(directoryFile);
-//                 freeMap->WriteBack(freeMapFile);
-//             }
-//             delete hdr;
-//         }
-//         delete freeMap;
-//     }
-//     delete directory;
-//     return success;
-// }
+                //更新磁盘中的目录和bitmap
+                directory->WriteBack(directoryFile);
+                freeMap->WriteBack(freeMapFile);
+            }
+            delete hdr;
+        }
+        delete freeMap;
+    }
+    delete directory;
+    return success;
+}
 
 //----------------------------------------------------------------------
 // FileSystem::Open
@@ -426,21 +426,21 @@ OpenFile *FileSystem::Open(char *path, int dirInode)
 }
 
 //原始版本
-// OpenFile *
-// FileSystem::Open(char *name)
-// {
-//     Directory *directory = new Directory(NumDirEntries);
-//     OpenFile *openFile = NULL;
-//     int sector;
+OpenFile *
+FileSystem::Open(char *name)
+{
+    Directory *directory = new Directory(NumDirEntries);
+    OpenFile *openFile = NULL;
+    int sector;
 
-//     DEBUG('f', "Opening file %s\n", name);
-//     directory->FetchFrom(directoryFile);
-//     sector = directory->Find(name);
-//     if (sector >= 0)
-//         openFile = new OpenFile(sector); // name was found in directory
-//     delete directory;
-//     return openFile; // return NULL if not found
-// }
+    DEBUG('f', "Opening file %s\n", name);
+    directory->FetchFrom(directoryFile);
+    sector = directory->Find(name);
+    if (sector >= 0)
+        openFile = new OpenFile(sector); // name was found in directory
+    delete directory;
+    return openFile; // return NULL if not found
+}
 
 //----------------------------------------------------------------------
 // FileSystem::Remove
@@ -544,38 +544,38 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 }
 
 //原始版本
-// bool FileSystem::Remove(char *name)
-// {
-//     Directory *directory;
-//     BitMap *freeMap;
-//     FileHeader *fileHdr;
-//     int sector;
+bool FileSystem::Remove(char *name)
+{
+    Directory *directory;
+    BitMap *freeMap;
+    FileHeader *fileHdr;
+    int sector;
 
-//     directory = new Directory(NumDirEntries);
-//     directory->FetchFrom(directoryFile);
-//     sector = directory->Find(name);
-//     if (sector == -1)
-//     {
-//         delete directory;
-//         return FALSE; // file not found
-//     }
-//     fileHdr = new FileHeader;
-//     fileHdr->FetchFrom(sector);
+    directory = new Directory(NumDirEntries);
+    directory->FetchFrom(directoryFile);
+    sector = directory->Find(name);
+    if (sector == -1)
+    {
+        delete directory;
+        return FALSE; // file not found
+    }
+    fileHdr = new FileHeader;
+    fileHdr->FetchFrom(sector);
 
-//     freeMap = new BitMap(NumSectors);
-//     freeMap->FetchFrom(freeMapFile);
+    freeMap = new BitMap(NumSectors);
+    freeMap->FetchFrom(freeMapFile);
 
-//     fileHdr->Deallocate(freeMap); // remove data blocks
-//     freeMap->Clear(sector);       // remove header block
-//     directory->Remove(name);
+    fileHdr->Deallocate(freeMap); // remove data blocks
+    freeMap->Clear(sector);       // remove header block
+    directory->Remove(name);
 
-//     freeMap->WriteBack(freeMapFile);     // flush to disk
-//     directory->WriteBack(directoryFile); // flush to disk
-//     delete fileHdr;
-//     delete directory;
-//     delete freeMap;
-//     return TRUE;
-// }
+    freeMap->WriteBack(freeMapFile);     // flush to disk
+    directory->WriteBack(directoryFile); // flush to disk
+    delete fileHdr;
+    delete directory;
+    delete freeMap;
+    return TRUE;
+}
 
 //----------------------------------------------------------------------
 // FileSystem::List

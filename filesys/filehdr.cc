@@ -42,6 +42,7 @@
 // 要分为两步：先分配直接
 // 索引，再分配一级索引。
 //----------------------------------------------------------------------
+
 bool FileHeader::Allocate(BitMap *freeMap, int fileSize, int tp)
 {
     type = tp;
@@ -56,14 +57,14 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize, int tp)
     //直接索引
     if (numSectors <= DIRECT_NUM)
     {
-        DEBUG('d', "Using direct allocation.\n");
+        // DEBUG('d', "Using direct allocation.\n");
         for (int i = 0; i < numSectors; i++)
             dataSectors[i] = freeMap->Find();
     }
     //一级索引
     else if (numSectors <= DIRECT_NUM + PRIMARY_NUM)
     {
-        DEBUG('d', "Using indirect allocation.\n");
+        // DEBUG('d', "Using indirect allocation.\n");
         //直接索引
         for (int i = 0; i < DIRECT_NUM; i++)
             dataSectors[i] = freeMap->Find();

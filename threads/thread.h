@@ -79,9 +79,9 @@ class Thread {
     // THEY MUST be in this position for SWITCH to work.
     int* stackTop;			 // the current stack pointer
     int machineState[MachineStateSize];  // all registers except for stackTop
-   #ifdef LAB1
+   
     int tID, uID, prio;
-   #endif
+   
   public:
 
     int timeSlice, totalRunningTime;
@@ -107,12 +107,12 @@ class Thread {
     void setStatus(ThreadStatus st) { status = st; }
     char* getName() { return (name); }
     void Print() { printf("%s, ", name); }
-    #ifdef LAB1
+    
     int getTID() {return tID;}
     int getuID() {return uID;}
     int getStatus() { return status;}
     int getPrio() {return prio;}
-    #endif
+    
   private:
     // some of the private data for this class is listed above
     

@@ -37,6 +37,7 @@
 
 #include "copyright.h"
 #include "openfile.h"
+#include "bitmap.h"
 
 #ifdef FILESYS_STUB // Temporarily implement file system calls as
 // calls to UNIX, until the real file system
@@ -78,14 +79,15 @@ public:
 							 // If "format", there is nothing on
 							 // the disk, so initialize the directory
 							 // and the bitmap of free blocks.
-	//lab4 多级目录 name的含义为文件的绝对路径
+	//lab4 多级目录 name的含义为文件的绝对路径,重载了三个函数
 	bool Create(char *path, int dirInode, int initialSize, BitMap *btmp);
-
-	// Create a file (UNIX creat)
+	bool Create(char * name , int initialSize);
 
 	OpenFile *Open(char *path, int dirInode); // Open a file (UNIX open)
+	OpenFile *Open(char * name); // Open a file (UNIX open)
 
 	bool Remove(char *path, int dirInode, BitMap* btmp);
+	bool Remove(char *name);
 
 
 	void List(); // List all the files in the file system

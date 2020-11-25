@@ -76,7 +76,7 @@ AddrSpace::AddrSpace(OpenFile *executable)
                                                                                           // to leave room for the stack
     numPages = divRoundUp(size, PageSize);
     size = numPages * PageSize;
-#ifndef DEMAND_PAGE//请求分页不需要此句
+#ifndef DEMAND_PAGE                   //请求分页不需要此句
     ASSERT(numPages <= NumPhysPages); // check we're not trying
                                       // to run anything too big --
                                       // at least until we have
@@ -112,9 +112,9 @@ AddrSpace::AddrSpace(OpenFile *executable)
 #else
         pageTable[i].valid = FALSE;
 #endif
-    DEBUG('p',"After allocated, ");
+    DEBUG('p', "After allocated, ");
     machine->bitmap->printBitMap();
-#ifndef DEMAND_PAGE//原始版本
+#ifndef DEMAND_PAGE //原始版本
     // zero out the entire address space, to zero the unitialized data segment
     // and the stack segment
     // bzero(machine->mainMemory, size); //lab2 多线程注释掉此句
@@ -135,36 +135,38 @@ AddrSpace::AddrSpace(OpenFile *executable)
                            noffH.initData.size, noffH.initData.inFileAddr);
     }
 #else //lab2 exercise 6/7请求分页
-    // zero out the entire address space (MemorySize), to zero the unitialized data segment 
-// and the stack segment
-    bzero(machine->mainMemory, MemorySize);
+        // zero out the entire address space (MemorySize), to zero the unitialized data segment
+        // and the stack segment
+        bzero(machine->mainMemory, MemorySize);
 
-    DEBUG('a', "Demand paging: copy executable to virtual memory!\n");
+        DEBUG('a', "Demand paging: copy executable to virtual memory!\n");
 
-    OpenFile *vm = fileSystem->Open("VirtualMemory");
+        OpenFile *vm = fileSystem->Open("VirtualMemory");
 
-    char *virtualMemory_temp;
-    virtualMemory_temp = new char[size];
-    for (i = 0; i < size; i++)
-        virtualMemory_temp[i] = 0;
+        char *virtualMemory_temp;
+        virtualMemory_temp = new char[size];
+        for (i = 0; i < size; i++)
+            virtualMemory_temp[i] = 0;
 
-    if (noffH.code.size > 0) {
-        DEBUG('a', "\tCopying code segment, at 0x%x, size %d\n",
-              noffH.code.virtualAddr, noffH.code.size);
-        executable->ReadAt(&(virtualMemory_temp[noffH.code.virtualAddr]),
-                           noffH.code.size, noffH.code.inFileAddr);
-        vm->WriteAt(&(virtualMemory_temp[noffH.code.virtualAddr]),
-                    noffH.code.size, noffH.code.virtualAddr*PageSize);
-    }
-    if (noffH.initData.size > 0) {
-        DEBUG('a', "\tCopying data segment, at 0x%x, size %d\n",
-              noffH.initData.virtualAddr, noffH.initData.size);
-        executable->ReadAt(&(virtualMemory_temp[noffH.initData.virtualAddr]),
-                           noffH.initData.size, noffH.initData.inFileAddr);
-        vm->WriteAt(&(virtualMemory_temp[noffH.initData.virtualAddr]),
-                    noffH.initData.size, noffH.initData.virtualAddr*PageSize);
-    }
-    delete vm;
+        if (noffH.code.size > 0)
+        {
+            DEBUG('a', "\tCopying code segment, at 0x%x, size %d\n",
+                  noffH.code.virtualAddr, noffH.code.size);
+            executable->ReadAt(&(virtualMemory_temp[noffH.code.virtualAddr]),
+                               noffH.code.size, noffH.code.inFileAddr);
+            vm->WriteAt(&(virtualMemory_temp[noffH.code.virtualAddr]),
+                        noffH.code.size, noffH.code.virtualAddr * PageSize);
+        }
+        if (noffH.initData.size > 0)
+        {
+            DEBUG('a', "\tCopying data segment, at 0x%x, size %d\n",
+                  noffH.initData.virtualAddr, noffH.initData.size);
+            executable->ReadAt(&(virtualMemory_temp[noffH.initData.virtualAddr]),
+                               noffH.initData.size, noffH.initData.inFileAddr);
+            vm->WriteAt(&(virtualMemory_temp[noffH.initData.virtualAddr]),
+                        noffH.initData.size, noffH.initData.virtualAddr * PageSize);
+        }
+        delete vm;
 #endif
 }
 

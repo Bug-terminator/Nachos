@@ -36,7 +36,7 @@ void SimpleThread(int which)
     }
 }
 
-#ifdef LAB1
+
 //----------------------------------------------------------------------
 // ThreadTest1
 // 	Set up a ping-pong between two threads, by forking a thread
@@ -136,7 +136,7 @@ void timeSlicingTest()
     t->Fork(mySimlpe2, 1);
     mySimlpe2(1);
 }
-#endif
+
 
 //----------------------------------------------------------------------
 // Lab3 Exercise4 生产者消费者问题
@@ -382,7 +382,6 @@ void ThreadTest()
 {
     switch (testnum)
     {
-#ifdef LAB1
     case 1:
         ThreadTest1();
         break;
@@ -395,7 +394,6 @@ void ThreadTest()
     case 4:
         timeSlicingTest();
         break;
-#endif
     case 5:
         Lab3Barrier();
         break;
