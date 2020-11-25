@@ -11,6 +11,7 @@
 |  Exercise3  |  Y   |
 |  Exercise4  |  Y   |
 | *challenge1 |  Y   |
+| *challenge2 |  Y   |
 
 ## Exercise1 调研
 
@@ -42,7 +43,7 @@ Linux在内核中实现了很多种类不同的锁，通常情况下用于系统
 >
 > code/threads/synchlist.h和code/threads/synchlist.cc
 
-### code/threads/synch.h
+### code/threads/synch.h(cc)
 
 实现了信号量机制。
 
@@ -52,6 +53,10 @@ Linux在内核中实现了很多种类不同的锁，通常情况下用于系统
 | List *queue   | 在P()中被阻塞的线程队列，等待value>0之后被唤醒               |
 | void P()      | 当value == 0时，将currentThread放入queue中。挂起currentThread并执行其他线程；当value>0时，value-- |
 | void V()      | 判断queue中是否有元素，如果有，则唤醒，并将其加入就绪队列；value++ |
+
+### code/threads/synchlist.h(cc)
+
+基于List类和信号量机制，实现了一个同步链表。本次实验不会用到，这里不再赘述。
 
 ## Exercise3 实现锁和条件变量
 
@@ -375,20 +380,6 @@ private:
 
 ```cpp
 //----------------------------------------------------------------------
-// lab3 challenge1 barrier
-// 在main中new 4 个线程，四个线程分别对4个全局变量进行赋值
-// 共分三个阶段,每个阶段赋值不同，但是在相同的阶段中，
-// 每个线程对对应元素赋值是相同的，本程序可用于barrier测试
-//----------------------------------------------------------------------
-
-#define THREADNUM 4//线程数
-#define PHASENUM 3//测试的阶段数
-int num[THREADNUM];//4个全局变量
-Barrier *barrier;
-
-//为每个变量赋值，变量与线程一一对应
-void assignValue(int i)//i代表数组下标
-{//----------------------------------------------------------------------
 // lab3 Challenge1 Barrier
 // new 4 个线程，每个线程分别对4个全局变量进行赋值
 // 共分三个阶段,每个阶段赋值不同，但是在相同的阶段中，
@@ -408,7 +399,7 @@ void AssignValue(int i) //i代表数组线标
     {
         num[i] = j;
         printf("Phase %d: thread \"%s\" finished assignment, num[%d] = %d.\n", j, currentThread->getName(), i, j);
-        //多次增加时间片，使得线程切换更频繁（随机时间片使用）
+        //多次增加时间片，使线程切换更频繁
         for (int i = 0; i < 4; ++i)
             interrupt->OneTick();
         barrier->stopAndWait(); //线程暂时被barrier阻塞，并等待所有线程抵达
@@ -427,34 +418,6 @@ void Lab3Barrier()
         sprintf(threadName, "Barrier test %d", i); //给线程命名
         threads[i] = new Thread(strdup(threadName));
         threads[i]->Fork(AssignValue, i);
-    }
-    while (!scheduler->isEmpty())
-        currentThread->Yield(); //跳过main的执行
-    //结束
-    printf("Barrier test Finished.\n");
-}
-  //每个循环代表一个阶段
-    for (int j = 1; j <= PHASENUM; ++j)
-    {
-        num[i] = j;//简单起见，赋值与阶段数相等
-        printf("Phase %d: thread \"%s\" finished assignment, num[%d] = %d.\n",j, currentThread->getName(), i, j);
-        barrier->stopAndWait();//线程暂时被barrier阻塞，并等待所有线程抵达
-    }
-}
-
-void Lab3Barrier()
-{
-
-    barrier = new Barrier("barrier", THREADNUM);//初始化barrier
-    Thread *threads[THREADNUM];//构造线程数组
-    //初始化线程和数组,并加入就绪队列
-    for (int i = 0; i < THREADNUM; ++i)
-    {
-        num[i] = 0;
-        char threadName[30];
-        sprintf(threadName, "Barrier test %d", i + 1); //给线程命名
-        threads[i] = new Thread(strdup(threadName));
-        threads[i]->Fork(assignValue, i);
     }
     while (!scheduler->isEmpty())
         currentThread->Yield(); //跳过main的执行
@@ -702,30 +665,33 @@ void RWLock::WriterRelease()
 ```cpp
 //----------------------------------------------------------------------
 // lab3 Challenge2 RWLock
-// 随机产生一定数量的读者和写者
-// 对临界资源buffer进行读写；
-// 写者的任务：写一句拿破仑的名言
+// 随机产生一定数量的读者和写者对临界资源buffer
+// 进行读写； 写者的任务：写一句拿破仑的名言:
 // "Victory belongs to the most persevering"
-// 直到写者写完为止
+// 构造两个写者，第一个负责写前半部分，第二个负责写
+// 后半部分，每个写者写一个字符就切换，观察是否会被
+// 其他读者或者写者抢占使用权，如果不会，证明写者优
+// 先实现成功
 //----------------------------------------------------------------------
-
 #define THREADNUM_R (Random() % 4 + 1)                           //读者数,不超过4
-#define THREADNUM_W (Random() % 4 + 1)                           //写者数,不超过4
+#define THREADNUM_W 2                                            //写者数
 const string QUOTE = "Victory belongs to the most persevering."; //拿破仑的名言
 const int QUOTE_SIZE = QUOTE.size();                             //长度
 int shared_i = 0;                                                //写者公用，用于定位，初始化为零
+RWLock *rwlock;                                                  //读写锁
 string RWBuffer;                                                 //buffer
 
 //写者线程
-void Writer(int dummy)
+void Writer(int writeSize)
 {
-    while (shared_i < QUOTE_SIZE)
+    while (shared_i < writeSize)
     {
         rwlock->WriterAcquire();
         RWBuffer.push_back(QUOTE[shared_i++]);
         printf("%s is writing: %s\n", currentThread->getName(), RWBuffer.c_str());
+        //让每个写者写一个字符就切换一次，看会不会被其他的读者或者写者抢占。
+        currentThread->Yield();
         rwlock->WriterRelease();
-        interrupt->OneTick();
     }
 }
 
@@ -737,7 +703,6 @@ void Reader(int dummy)
         rwlock->ReaderAcquire();
         printf("%s is reading :%s\n", currentThread->getName(), RWBuffer.c_str());
         rwlock->ReaderRelease();
-        interrupt->OneTick();
     }
 }
 
@@ -755,7 +720,8 @@ void Lab3RWLock()
         char threadName[20];
         sprintf(threadName, "Writer %d", i); //给线程命名
         threadWriter[i] = new Thread(strdup(threadName));
-        threadWriter[i]->Fork(Writer, 0);
+        int val = !i ? QUOTE_SIZE - 20 : QUOTE_SIZE;
+        threadWriter[i]->Fork(Writer, val);
     }
     //初始化读者
     for (int i = 0; i < THREADNUM_R; ++i)
@@ -770,170 +736,64 @@ void Lab3RWLock()
         currentThread->Yield(); //跳过main的执行
 
     //结束
-    printf("Producer consumer test Finished.\n");
+    printf("Secondary Reader Writer test Finished.\n");
 }
 ```
 
-在terminal中输入`./nachos  -rs -q 7`可查看结果：
+在terminal中输入`./nachos -q 7`可查看结果：
 
 ```cpp
-vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ make;./nachos  -rs -q 7
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ make;./nachos -q 7
 make: `nachos' is up to date.
-Random created 4 readers, 2 writers.
+Random created 2 readers, 2 writers.
 Writer 0 is writing: V
 Writer 0 is writing: Vi
 Writer 0 is writing: Vic
 Writer 0 is writing: Vict
-===============Random context switch, Ticks = 190===============
-Ready list contents:
-Writer 1, Reader 0, Reader 1, Reader 2, Reader 3, main,
-Writer 1 is writing: Victo
-Writer 1 is writing: Victor
-===============Random context switch, Ticks = 250===============
-Ready list contents:
-Reader 0, Reader 1, Reader 2, Reader 3, main, Writer 0,
-Reader 0 is reading :Victor
-Reader 0 is reading :Victor
-Reader 0 is reading :Victor
-Reader 0 is reading :Victor
-Reader 0 is reading :Victor
-===============Random context switch, Ticks = 420===============
-Ready list contents:
-Reader 1, Reader 2, Reader 3, main, Writer 0, Writer 1,
-Reader 1 is reading :Victor
-Reader 1 is reading :Victor
-Reader 1 is reading :Victor
-Reader 1 is reading :Victor
-===============Random context switch, Ticks = 550===============
-Ready list contents:
-Reader 2, Reader 3, main, Writer 0, Writer 1, Reader 0,
-Reader 2 is reading :Victor
-Reader 2 is reading :Victor
-Reader 2 is reading :Victor
-Reader 2 is reading :Victor
-Reader 2 is reading :Victor
-===============Random context switch, Ticks = 700===============
-Ready list contents:
-Reader 3, main, Writer 0, Writer 1, Reader 0, Reader 1,
-Reader 3 is reading :Victor
-===============Random context switch, Ticks = 730===============
-Ready list contents:
-main, Writer 0, Writer 1, Reader 0, Reader 1, Reader 2,
-Reader 0 is reading :Victor
+Writer 0 is writing: Victo
+Writer 0 is writing: Victor
 Writer 0 is writing: Victory
-===============Random context switch, Ticks = 910===============
-Ready list contents:
-Writer 1, main, Reader 0, Reader 1, Reader 2, Reader 3,
 Writer 0 is writing: Victory
 Writer 0 is writing: Victory b
 Writer 0 is writing: Victory be
 Writer 0 is writing: Victory bel
-===============Random context switch, Ticks = 1050===============
-Ready list contents:
-main, Writer 1, Reader 0, Reader 1, Reader 2, Reader 3,
-===============Random context switch, Ticks = 1070===============
-Ready list contents:
-main,
 Writer 0 is writing: Victory belo
 Writer 0 is writing: Victory belon
 Writer 0 is writing: Victory belong
 Writer 0 is writing: Victory belongs
 Writer 0 is writing: Victory belongs
-===============Random context switch, Ticks = 1240===============
-Ready list contents:
-main, Writer 1, Reader 0, Reader 1, Reader 2, Reader 3,
 Writer 0 is writing: Victory belongs t
 Writer 0 is writing: Victory belongs to
 Writer 0 is writing: Victory belongs to
 Writer 0 is writing: Victory belongs to t
-Writer 0 is writing: Victory belongs to th
-===============Random context switch, Ticks = 1410===============
-Ready list contents:
-main, Writer 1, Reader 0, Reader 1, Reader 2, Reader 3,
-Writer 0 is writing: Victory belongs to the
-===============Random context switch, Ticks = 1440===============
-Ready list contents:
-main, Writer 1, Reader 0, Reader 1, Reader 2, Reader 3,
+Writer 1 is writing: Victory belongs to th
+Writer 1 is writing: Victory belongs to the
 Writer 1 is writing: Victory belongs to the
 Writer 1 is writing: Victory belongs to the m
 Writer 1 is writing: Victory belongs to the mo
 Writer 1 is writing: Victory belongs to the mos
 Writer 1 is writing: Victory belongs to the most
 Writer 1 is writing: Victory belongs to the most
-===============Random context switch, Ticks = 1630===============
-Ready list contents:
-Reader 0, Reader 1, Reader 2, Reader 3, Writer 0, main,
-Reader 0 is reading :Victory belongs to the most
-Reader 0 is reading :Victory belongs to the most
-Reader 0 is reading :Victory belongs to the most
-Reader 0 is reading :Victory belongs to the most
-Reader 0 is reading :Victory belongs to the most
-===============Random context switch, Ticks = 1770===============
-Ready list contents:
-Reader 1, Reader 2, Reader 3, Writer 0, main, Writer 1,
-Reader 1 is reading :Victory belongs to the most
-Reader 1 is reading :Victory belongs to the most
-===============Random context switch, Ticks = 1840===============
-Ready list contents:
-Reader 2, Reader 3, Writer 0, main, Writer 1, Reader 0,
-Reader 2 is reading :Victory belongs to the most
-Reader 2 is reading :Victory belongs to the most
-Reader 2 is reading :Victory belongs to the most
-Reader 2 is reading :Victory belongs to the most
-===============Random context switch, Ticks = 1970===============
-Ready list contents:
-Reader 3, Writer 0, main, Writer 1, Reader 0, Reader 1,
-Reader 3 is reading :Victory belongs to the most
-Reader 3 is reading :Victory belongs to the most
-===============Random context switch, Ticks = 2040===============
-Ready list contents:
-Writer 0, main, Writer 1, Reader 0, Reader 1, Reader 2,
-Reader 1 is reading :Victory belongs to the most
-Reader 2 is reading :Victory belongs to the most
-Reader 3 is reading :Victory belongs to the most
-===============Random context switch, Ticks = 2180===============
-Ready list contents:
-main, Writer 0, Writer 1, Reader 0, Reader 1, Reader 2,
-Writer 0 is writing: Victory belongs to the most p
-Writer 0 is writing: Victory belongs to the most pe
-Writer 0 is writing: Victory belongs to the most per
-Writer 0 is writing: Victory belongs to the most pers
-===============Random context switch, Ticks = 2310===============
-Ready list contents:
-Writer 1, Reader 0, Reader 1, Reader 2, Reader 3, main,
-===============Random context switch, Ticks = 2320===============
-Ready list contents:
-Reader 0, Reader 1, Reader 2, Reader 3, main, Writer 0,
-===============Random context switch, Ticks = 2350===============
-Ready list contents:
-Writer 0, Writer 1,
+Writer 1 is writing: Victory belongs to the most p
+Writer 1 is writing: Victory belongs to the most pe
+Writer 1 is writing: Victory belongs to the most per
+Writer 1 is writing: Victory belongs to the most pers
 Writer 1 is writing: Victory belongs to the most perse
 Writer 1 is writing: Victory belongs to the most persev
-===============Random context switch, Ticks = 2410===============
-Ready list contents:
-main, Reader 0, Reader 1, Reader 2, Reader 3, Writer 0,
-Writer 0 is writing: Victory belongs to the most perseve
-Writer 0 is writing: Victory belongs to the most persever
-===============Random context switch, Ticks = 2480===============
-Ready list contents:
-Writer 1, main, Reader 0, Reader 1, Reader 2, Reader 3,
+Writer 1 is writing: Victory belongs to the most perseve
+Writer 1 is writing: Victory belongs to the most persever
 Writer 1 is writing: Victory belongs to the most perseveri
 Writer 1 is writing: Victory belongs to the most perseverin
 Writer 1 is writing: Victory belongs to the most persevering
 Writer 1 is writing: Victory belongs to the most persevering.
 Reader 0 is reading :Victory belongs to the most persevering.
-===============Random context switch, Ticks = 2650===============
-Ready list contents:
-Reader 1, Reader 2, Reader 3, Writer 0, main,
 Reader 1 is reading :Victory belongs to the most persevering.
-Reader 2 is reading :Victory belongs to the most persevering.
-Reader 3 is reading :Victory belongs to the most persevering.
-Producer consumer test Finished.
+Secondary Reader Writer test Finished.
 No threads ready or runnable, and no pending interrupts.
 Assuming the program completed.
 Machine halting!
 
-Ticks: total 2844, idle 54, system 2790, user 0
+Ticks: total 1760, idle 0, system 1760, user 0
 Disk I/O: reads 0, writes 0
 Console I/O: reads 0, writes 0
 Paging: faults 0
@@ -942,8 +802,214 @@ Network I/O: packets received 0, sent 0
 Cleaning up...
 ```
 
+输入`./nachos -d c -q 7`可以查看线程阻塞信息：
 
+```shell
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/threads$ make;./nachos -d c -q 7
+make: `nachos' is up to date.
+Random created 2 readers, 2 writers.
+Writer 0 is writing: V
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Vi
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Vic
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Vict
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victo
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victor
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory b
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory be
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory bel
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belo
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belon
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belong
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belongs
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belongs
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belongs t
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belongs to
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belongs to
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 0 is writing: Victory belongs to t
+Condition has blocked thread "Writer 1".
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Writer 1    Reader 0        Reader 1
+Writer 1 is writing: Victory belongs to th
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the m
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the mo
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the mos
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most p
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most pe
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most per
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most pers
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most perse
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most persev
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most perseve
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most persever
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most perseveri
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most perseverin
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most persevering
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Writer 1 is writing: Victory belongs to the most persevering.
+Condition has blocked thread "Reader 0".
+Condition has blocked thread "Reader 1".
+broadcast : Reader 0    Reader 1
+Reader 0 is reading :Victory belongs to the most persevering.
+broadcast :
+Reader 1 is reading :Victory belongs to the most persevering.
+broadcast :
+Secondary Reader Writer test Finished.
+No threads ready or runnable, and no pending interrupts.
+Assuming the program completed.
+Machine halting!
 
+Ticks: total 1760, idle 0, system 1760, user 0
+Disk I/O: reads 0, writes 0
+Console I/O: reads 0, writes 0
+Paging: faults 0
+Network I/O: packets received 0, sent 0
 
+Cleaning up...
+```
 
-## *Challenge 3  研究Linux的kfifo机制是否可以移植到Nachos上作为一个新的同步模块。
+### 结论
+
+结果显示，在写者写完之前，读者和其它写者会被一直阻塞，直到写者完成自己的任务之后，其它写者才能进行写，没有写者写了，读者才能进行读，并且多个读者之间可以并发读，这表明我们的RWLock实现成功。
+
+## challenge 3  研究Linux的kfifo机制是否可以移植到Nachos上作为一个新的同步模块
+
+todo

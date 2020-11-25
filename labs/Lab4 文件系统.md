@@ -877,7 +877,13 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 }
 ```
 
+#### 测试
 
+
+
+#### 改进
+
+当前的Remove()只能对文件本身进行删除，如果我们想删除/var/log/rpmpkgs下的log，我们能先删除rpmpkgs，再删除log。所以我们应该对此进行改进，使得可以递归地删除log和它的所有子文件夹(todo)。
 
 ### Exercise 5 动态调整文件长度
 

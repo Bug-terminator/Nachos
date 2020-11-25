@@ -299,15 +299,16 @@ void Lab3Barrier()
 
 //----------------------------------------------------------------------
 // lab3 Challenge2 RWLock
-// 随机产生一定数量的读者和写者
-// 对临界资源buffer进行读写；
-// 写者的任务：写一句拿破仑的名言
+// 随机产生一定数量的读者和写者对临界资源buffer
+// 进行读写； 写者的任务：写一句拿破仑的名言:
 // "Victory belongs to the most persevering"
-// 直到写者写完为止
+// 构造两个写者，第一个负责写前半部分，第二个负责写
+// 后半部分，每个写者写一个字符就切换，观察是否会被
+// 其他读者或者写者抢占使用权，如果不会，证明写者优
+// 先实现成功
 //----------------------------------------------------------------------
-
 #define THREADNUM_R (Random() % 4 + 1)                           //读者数,不超过4
-#define THREADNUM_W (Random() % 4 + 1)                           //写者数,不超过4
+#define THREADNUM_W 2                                            //写者数
 const string QUOTE = "Victory belongs to the most persevering."; //拿破仑的名言
 const int QUOTE_SIZE = QUOTE.size();                             //长度
 int shared_i = 0;                                                //写者公用，用于定位，初始化为零
@@ -315,15 +316,17 @@ RWLock *rwlock;                                                  //读写锁
 string RWBuffer;                                                 //buffer
 
 //写者线程
-void Writer(int dummy)
+void Writer(int writeSize)
 {
-    
+    while (shared_i < writeSize)
+    {
         rwlock->WriterAcquire();
         RWBuffer.push_back(QUOTE[shared_i++]);
         printf("%s is writing: %s\n", currentThread->getName(), RWBuffer.c_str());
+        //让每个写者写一个字符就切换一次，看会不会被其他的读者或者写者抢占。
+        currentThread->Yield();
         rwlock->WriterRelease();
-        interrupt->OneTick();
-    
+    }
 }
 
 //读者线程
@@ -334,7 +337,6 @@ void Reader(int dummy)
         rwlock->ReaderAcquire();
         printf("%s is reading :%s\n", currentThread->getName(), RWBuffer.c_str());
         rwlock->ReaderRelease();
-        interrupt->OneTick();
     }
 }
 
@@ -352,7 +354,8 @@ void Lab3RWLock()
         char threadName[20];
         sprintf(threadName, "Writer %d", i); //给线程命名
         threadWriter[i] = new Thread(strdup(threadName));
-        threadWriter[i]->Fork(Writer, 0);
+        int val = !i ? QUOTE_SIZE - 20 : QUOTE_SIZE;
+        threadWriter[i]->Fork(Writer, val);
     }
     //初始化读者
     for (int i = 0; i < THREADNUM_R; ++i)
@@ -367,7 +370,7 @@ void Lab3RWLock()
         currentThread->Yield(); //跳过main的执行
 
     //结束
-    printf("Producer consumer test Finished.\n");
+    printf("Secondary Reader Writer test Finished.\n");
 }
 
 //----------------------------------------------------------------------
