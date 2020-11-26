@@ -542,7 +542,7 @@ Cleaning up...
 
 本次实验将实现第二类读写锁。
 
->[Readers–writer lock - WIKIPEDIA](https://en.wikipedia.org/wiki/Readers–writer_lock))
+>[Readers–writer lock - WIKIPEDIA](https://en.wikipedia.org/wiki/Readers–writer_lock)
 
 ### 使用Condition和Lock
 

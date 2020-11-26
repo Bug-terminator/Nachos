@@ -85,21 +85,22 @@ int main(int argc, char **argv)
 	DEBUG('t', "Entering main");
 	(void)Initialize(argc, argv);
 
-#ifdef THREADS
-	// for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount)
-	// {
-	// 	argCount = 1;
-	// 	switch (argv[0][1])
-	// 	{
-	// 	case 'q':
-	// 		testnum = atoi(argv[1]);
-	// 		argCount++;
-	// 		break;
-	// 	default:
-	// 		testnum = 1;
-	// 		break;
-	// 	}
-	// }
+
+#ifdef THREADS && !TEST_FILESYS
+	for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount)
+	{
+		argCount = 1;
+		switch (argv[0][1])
+		{
+		case 'q':
+			testnum = atoi(argv[1]);
+			argCount++;
+			break;
+		default:
+			testnum = 1;
+			break;
+		}
+	}
 
 	ThreadTest();
 #endif
@@ -146,18 +147,13 @@ int main(int argc, char **argv)
 			argCount = 2;
 		}
 		//原始版本
-		// else if (!strcmp(*argv, "-r"))
-		// { // remove Nachos file
-		// 	ASSERT(argc > 1);
-		// 	fileSystem->Remove(*(argv + 1));
-		// 	argCount = 2;
-		// }
 		else if (!strcmp(*argv, "-r"))
 		{ // remove Nachos file
 			ASSERT(argc > 1);
-			fileSystem->Remove(*(argv + 1), 1,NULL);
-			argCount = 4;
+			fileSystem->Remove(*(argv + 1));
+			argCount = 2;
 		}
+		
 		else if (!strcmp(*argv, "-l"))
 		{ // list Nachos directory
 			fileSystem->List();
