@@ -328,9 +328,39 @@ Nachos文件通过code/filesys/filesys.cc中的create函数创建，创建文件
 
 #### 突破文件名长度的限制
 
-文件名位于目录项中，将char[]改为char*即可。
+文件名位于目录项中，我曾尝试将char[]改为char*，但是这样做之后会`segmentation fault`，于是我查看了Linux源代码，发现Linux也是用char[]来表示文件名。
 
-这样一来，一个directoryEntry的大小为sizeof(char*) + sizeof(bool) + sizeof(int) = 9；一个sector可以存放 128 / 9 = 14个目录项。
+> https://github.com/torvalds/linux/blob/master/include/linux/dcache.h
+
+```cpp
+struct dentry {
+	unsigned char d_iname[DNAME_INLINE_LEN];	/* small names */
+} __randomize_layout;
+```
+
+```cpp
+#ifdef CONFIG_64BIT
+# define DNAME_INLINE_LEN 32 /* 192 bytes */
+#else
+# ifdef CONFIG_SMP
+#  define DNAME_INLINE_LEN 36 /* 128 bytes */
+# else
+#  define DNAME_INLINE_LEN 40 /* 128 bytes */
+# endif
+#endif
+```
+
+文件名长度和系统有关。
+
+> [深入 char * ,char ** ,char a[ ] ,char *a[] 内核](https://blog.csdn.net/daiyutage/article/details/8604720)
+>
+> **当定义 char a[10 ] 时，编译器会给数组分配十个单元，每个单元的数据类型为字符。**
+>
+> **而定义 char \*s 时， 这是个指针变量，只占四个字节，32位，用来保存一个地址。**
+
+nachos的文件系统独立于main的运行，即main结束之后文件系统依然存在，内容不变。每次main结束之后，分配给char*的内存会被回收，这就导致下一次用同样的地址去找文件名会导致出错。所以我们应该使用char[]数组将文件名永久保存在磁盘中。
+
+
 
 ### Exercise 3 扩展文件长度
 
