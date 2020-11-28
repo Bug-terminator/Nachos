@@ -106,6 +106,19 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize, int tp)
     // return TRUE;
 }
 
+//原始版本
+bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
+{
+    numBytes = fileSize;
+    numSectors = divRoundUp(fileSize, SectorSize);
+    if (freeMap->NumClear() < numSectors)
+        return FALSE; // not enough space
+
+    for (int i = 0; i < numSectors; i++)
+        dataSectors[i] = freeMap->Find();
+    createTime = stats->totalTicks; //lab4 文件创造时间
+    return TRUE;
+}
 //----------------------------------------------------------------------
 // FileHeader::Deallocate
 // 	De-allocate all the space allocated for data blocks for this file.
@@ -115,6 +128,7 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize, int tp)
 
 void FileHeader::Deallocate(BitMap *freeMap)
 {
+#ifdef INDIRECT_INDEX
     //直接索引
     if (numSectors <= DIRECT_NUM)
     {
@@ -149,12 +163,14 @@ void FileHeader::Deallocate(BitMap *freeMap)
             freeMap->Clear((int)primary[i]);
         }
     }
+#else
     // 原始版本
-    // for (int i = 0; i < numSectors; i++)
-    // {
-    //     ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
-    //     freeMap->Clear((int)dataSectors[i]);
-    // }
+    for (int i = 0; i < numSectors; i++)
+    {
+        ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
+        freeMap->Clear((int)dataSectors[i]);
+    }
+#endif
 }
 
 //----------------------------------------------------------------------
@@ -192,6 +208,7 @@ void FileHeader::WriteBack(int sector)
 //----------------------------------------------------------------------
 int FileHeader::ByteToSector(int offset)
 {
+#ifdef INDIRECT_INDEX
     //lab4 新增上次访问时间
     lastVisitedTime = stats->totalTicks;
     //lab4 改为间接索引
@@ -213,9 +230,11 @@ int FileHeader::ByteToSector(int offset)
         synchDisk->ReadSector(numSector, (char *)primary);
         return primary[v_index - DIRECT_NUM];
     }
+#else
     //原始版本
-    // lastVisitedTime = stats->totalTicks; //lab4 新增上次访问时间
-    // return (dataSectors[offset / SectorSize]);
+    lastVisitedTime = stats->totalTicks; //lab4 新增上次访问时间
+    return (dataSectors[offset / SectorSize]);
+#endif
 }
 
 //----------------------------------------------------------------------

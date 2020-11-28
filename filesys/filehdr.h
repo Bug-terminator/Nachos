@@ -65,7 +65,7 @@ public:
   //lab4 扩展文件属性
   bool Allocate(BitMap *freeMap, int fileSize, int tp);
   //原始版本
-  // bool Allocate(BitMap *bitMap, int fileSize); // Initialize a file header,
+  bool Allocate(BitMap *bitMap, int fileSize); // Initialize a file header,
                                                //  including allocating space
                                                //  on disk for the file data
   void Deallocate(BitMap *bitMap);             // De-allocate this file's

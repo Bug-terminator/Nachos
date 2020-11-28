@@ -86,24 +86,24 @@ int main(int argc, char **argv)
 	(void)Initialize(argc, argv);
 
 
-#ifdef THREADS && !TEST_FILESYS
-	for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount)
-	{
-		argCount = 1;
-		switch (argv[0][1])
-		{
-		case 'q':
-			testnum = atoi(argv[1]);
-			argCount++;
-			break;
-		default:
-			testnum = 1;
-			break;
-		}
-	}
+// #ifdef THREADS && NTEST_FILESYS
+// 	for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount)
+// 	{
+// 		argCount = 1;
+// 		switch (argv[0][1])
+// 		{
+// 		case 'q':
+// 			testnum = atoi(argv[1]);
+// 			argCount++;
+// 			break;
+// 		default:
+// 			testnum = 1;
+// 			break;
+// 		}
+// 	}
 
-	ThreadTest();
-#endif
+// 	ThreadTest();
+// #endif
 
 	for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount)
 	{
