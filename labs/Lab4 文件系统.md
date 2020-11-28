@@ -399,6 +399,14 @@ This is the spring of our discontent.\a
 
 成功完成exercise2。
 
+#### 反思
+
+> [linux 页目录项-github](https://github.com/torvalds/linux/blob/master/include/linux/dcache.h)
+>
+> [深入 char * ,char ** ,char a[] ,char *a[] 内核-CSDN](https://blog.csdn.net/daiyutage/article/details/8604720)
+
+Linux中文件名的存储方式为char[],这引起了我的反思。为什么放着空间更小，表达长度更多的的char*不用，要选择固定长度的，占空间更大的char[]？因为char表示的内存在主机关机之后会被回收，下一次开机，用同样的内存地址去寻找必然导致出错。不过好在我们的Nachos是一个虚拟操作系统，它的生命周期本就是宿主主机一次开机的时间内，所以用char\*也是可以的。
+
 ### Exercise 3 扩展文件长度
 
 > 改直接索引为间接索引，以突破文件长度不能超过4KB的限制。
@@ -407,14 +415,16 @@ This is the spring of our discontent.\a
 
 每次调用File system::Create()函数，都会调用FileHeader::Allocate()来分配物理空间。
 
-在Exercise2中增加5个成员变量之后，文件的最大长度变为3200B，文件索引为25项。规定索引表的前24项为直接接索引，最后一项为一级索引，存放的是一级索引表对应扇区号。每个一级索引占一个扇区，可以容纳128/4  = 32个索引项：
+在Exercise2中增加6个成员变量之后，文件的最大长度变为3072B，文件索引为24项。
+
+Nachos的磁盘大小块数为32\*32 = 1024块（`code/machine/disk.h`)，直接索引可以存储1块物理空间，一级间接索引可以存储32块物理块，二级间接索引可以存储32\*32=1024块物理块，因此要完整地存储Nachos的全部磁盘，只需要一个二级索引即可。然而直接索引获取目标需要一次I/O，一级索引需要2次I/O，而二级索引需要3次I/O,为了避免I/O过多引起的时间消耗，应尽量多地分配直接索引和一级索引，最后再用二级索引。因此，我的分配方案为：前22项为直接索引，第23项为一级索引，第24项为二级索引。
+
+新增宏定义如下：
 
 ```cpp
-//----------------------------------------------------------------------
-//Lab4 Exercise3 改为间接索引
-//----------------------------------------------------------------------
-#define DERECT_NUM 24  //直接索引数，表示[0,24)块
-#define PRIMARY_NUM (SectorSize / sizeof(int)) //一级索引块数，表示[24,56)块。文件最大长度 = 24 * 128 + 128/4 * 128 =  7168满足题意
+#define SECPERIND 32                   //每一个间接索引可以表示的物理块数
+#define NUMDIRECT 22                   //直接索引表示的最大块数
+#define NUMFIRST NUMDIRECT + SECPERIND //一级索引表达的最大块数
 ```
 
 ```cpp
@@ -422,7 +432,8 @@ This is the spring of our discontent.\a
 // lab4 突破文件长度限制
 // 根据文件长度分配内存需
 // 要分为两步：先分配直接
-// 索引，再分配一级索引。
+// 索引，再分配一级索引,
+// 最后分配二级索引。
 //----------------------------------------------------------------------
 bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 {

@@ -20,15 +20,19 @@
 
 //原始版本 NumDirect = 30
 // #define NumDirect ((SectorSize - 2 * sizeof(int)) / sizeof(int))
-//lab5 exercise2 NumDirect = 25
-#define NumDirect ((SectorSize - 7 * sizeof(int)) / sizeof(int))
+//lab5 exercise2 NumDirect = 24
+#define NumDirect ((SectorSize - 8 * sizeof(int)) / sizeof(int))
 #define MaxFileSize (NumDirect * SectorSize)
 
+//lab4 exercise3
+#define SECPERIND 32                   //每一个间接索引可以表示的物理块数，sectors per indirect
+#define NUMDIRECT 22                   //直接索引表示的最大块数
+#define NUMFIRST NUMDIRECT + SECPERIND //一级索引表达的最大块数
 typedef enum
 {
   NORM,
   DIR
-}FileType;
+} FileType;
 // The following class defines the Nachos "file header" (in UNIX terms,
 // the "i-node"), describing where on disk to find all of the data in the file.
 // The file header is organized as a simple table of pointers to
@@ -48,10 +52,10 @@ class FileHeader
 {
 public:
   bool Allocate(BitMap *bitMap, int fileSize); // Initialize a file header,
-      //  including allocating space
-      //  on disk for the file data
-  void Deallocate(BitMap *bitMap); // De-allocate this file's
-      //  data blocks
+                                               //  including allocating space
+                                               //  on disk for the file data
+  void Deallocate(BitMap *bitMap);             // De-allocate this file's
+                                               //  data blocks
 
   void FetchFrom(int sectorNumber); // Initialize file header from disk
   void WriteBack(int sectorNumber); // Write modifications to file header
@@ -67,17 +71,17 @@ public:
   void Print(); // Print the contents of the file.
 
   //lab4 exercise2
-  void SetLastVisitedTime(void){lastVisitedTime = GetCurrentTime();}
-  char* GetLastVisitedTime(void){return lastVisitedTime;}
-  void SetLastModifiedTime(void){lastModifiedTime = GetCurrentTime();}
-  char *GetLastModifiedTime(void){return lastModifiedTime;}
-  void SetCreateTime(void){createTime = GetCurrentTime();}
-  char *GetCreateTime(void){return createTime;}
-  void SetPath(char * pth){path = pth;}
-  char* GetPath(void){return path;}
-  void SetFileType(FileType tp){fileType = tp;}
-  FileType GetFileType(){return fileType;}
-  int GetInodeSector(){return inodeSector;}//0 for '.', 1 for '..'
+  void SetLastVisitedTime(void) { lastVisitedTime = GetCurrentTime(); }
+  char *GetLastVisitedTime(void) { return lastVisitedTime; }
+  void SetLastModifiedTime(void) { lastModifiedTime = GetCurrentTime(); }
+  char *GetLastModifiedTime(void) { return lastModifiedTime; }
+  void SetCreateTime(void) { createTime = GetCurrentTime(); }
+  char *GetCreateTime(void) { return createTime; }
+  void SetPath(char *pth) { path = pth; }
+  char *GetPath(void) { return path; }
+  void SetFileType(FileType tp) { fileType = tp; }
+  FileType GetFileType() { return fileType; }
+  int GetInodeSector() { return inodeSector; } //0 for '.', 1 for '..'
 private:
   int numBytes;               // Number of bytes in the file
   int numSectors;             // Number of data sectors in the file
@@ -90,9 +94,8 @@ private:
   char *createTime;
   char *path;
   FileType fileType;
-  int inodeSector;//openfile析构时需要保存信息
-  char * GetCurrentTime();
-
+  int inodeSector; //openfile析构时需要保存信息
+  char *GetCurrentTime();
 };
 
 #endif // FILEHDR_H

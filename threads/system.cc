@@ -24,13 +24,13 @@ Statistics *stats;           // performance metrics
 Timer *timer;                // the hardware timer device,
                              // for invoking context switches
 
-#ifdef FILESYS_NEEDED
+// #ifdef FILESYS_NEEDED
 FileSystem *fileSystem;
-#endif
+// #endif
 
-#ifdef FILESYS
+// #ifdef FILESYS //为了代码补全，暂时注释
 SynchDisk *synchDisk;
-#endif
+// #endif
 
 #ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB
 Machine *machine;   // user program memory and registers
