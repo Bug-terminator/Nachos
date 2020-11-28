@@ -34,7 +34,10 @@ class DirectoryEntry {
     bool inUse;				// Is this directory entry in use?
     int sector;				// Location on disk to find the 
 					//   FileHeader for this file 
-    char name[FileNameMaxLen + 1];	// Text name for file, with +1 for 
+    // char name[FileNameMaxLen + 1];	// Text name for file, with +1 for 
+
+    // lab4 exercise2
+    char *name;
 					// the trailing '\0'
 };
 

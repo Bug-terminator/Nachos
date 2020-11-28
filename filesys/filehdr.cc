@@ -47,6 +47,10 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 
     for (int i = 0; i < numSectors; i++)
         dataSectors[i] = freeMap->Find();
+    //lab4 exercise2
+    SetCreateTime();
+    SetLastModifiedTime();
+    SetLastVisitedTime();
     return TRUE;
 }
 
@@ -75,6 +79,8 @@ void FileHeader::Deallocate(BitMap *freeMap)
 
 void FileHeader::FetchFrom(int sector)
 {
+    //在这里获取inodeSector
+    inodeSector = sector;
     synchDisk->ReadSector(sector, (char *)this);
 }
 
@@ -103,6 +109,7 @@ void FileHeader::WriteBack(int sector)
 int FileHeader::ByteToSector(int offset)
 {
     return (dataSectors[offset / SectorSize]);
+    SetLastVisitedTime();
 }
 
 //----------------------------------------------------------------------
@@ -120,11 +127,17 @@ int FileHeader::FileLength()
 // 	Print the contents of the file header, and the contents of all
 //	the data blocks pointed to by the file header.
 //----------------------------------------------------------------------
-
+const char *enumTostirng[2] = {"NORM", "DIR"};//用于enum到string的转换，debug用
 void FileHeader::Print()
 {
     int i, j, k;
     char *data = new char[SectorSize];
+
+    //lab4 exercise2
+    printf("File type: %s\n",enumTostirng[fileType]);
+    printf("Created: %s", createTime);
+    printf("Modified: %s", lastModifiedTime);
+    printf("Visited: %s",lastVisitedTime);
 
     printf("FileHeader contents.  File size: %d.  File blocks:\n", numBytes);
     for (i = 0; i < numSectors; i++)

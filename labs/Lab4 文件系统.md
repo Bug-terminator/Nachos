@@ -290,21 +290,22 @@ private:
 
 #### 新增变量
 
-Nachos的file header等价于UNIX中的i-node，因此我将题述的几个变量加在code/filesys/filehdr.h的FileHeader类中，方便起见，设为public(虽然这样很不严谨，但是确实很省事）：
+Nachos的file header等价于UNIX中的i-node，因此我将题述的几个变量加在code/filesys/filehdr.h的FileHeader类中，并调用c语言库time.h来获取时间。
 
 ```cpp
 class FileHeader
 {
   ...
-public:
-  //lab4新增
-  int createTime; //文件创造时间
-  int lastVisitedTime; //文件上次被访问的时间
-  int lastModifiedTime;//文件上次被修改的时间
-  int type; //文件类型，0表示i-node，1表示普通文件
-  char *path; //文件路径
+private:
+  //lab4 exercise2
+  char *lastVisitedTime;
+  char *lastModifiedTime;
+  char *createTime;
+  char *path;
+  FileType fileType;
+  int inodeSector;//openfile析构时需要保存信息
 };
-
+//此外还有这几个成员变量的Getter()&Setter(),这里不再赘述。
 ```
 
 新增宏：
@@ -313,54 +314,90 @@ public:
 //----------------------------------------------------------------------
 //Lab4 Exercise2 新增成员变量
 //----------------------------------------------------------------------
-#define VAR_NUM  7//i-node中的变量数，变量的均占4B(int, char *), i-node中共7个变量，所以为7
-#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // i-node中索引表大小,值为                                                                                    //（128 -  4*7）/4 = 25
-#define MaxFileSize (NumDirect * SectorSize) //文件最大长度 25 * 128 = 3200B
+#define VAR_NUM  8//i-node中的变量数，变量的均占4B(int, char *), i-node中共8个变量，所以为8
+#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // i-node中索引表大小,值为                                                                                    //（128 -  4*8）/4 = 24
+#define MaxFileSize (NumDirect * SectorSize) //文件最大长度 24 * 128 = 3072B
 ```
 
 #### 维护成员变量						
 
-Nachos文件通过code/filesys/filesys.cc中的create函数创建，创建文件会调用FileHeader::Allocate()函数初始化一个i-node，应该在此函数内部增加对createTime的维护。每次访问文件（无论是读还是写），都会调用FileHeader::ByteToSector()函数来执行地址转换，所以应该在其中加入对lastVisitedTime的维护。而lastModifiedTime稍微复杂一点，只有对文件进行写操作时才会更新，所以应该在OpenFile::WriteAt()的结尾处增加对它的维护，表示一次写的结束。
+Nachos文件通过code/filesys/filesys.cc中的create函数创建，创建文件会调用FileHeader::Allocate()函数初始化一个i-node，应该在此函数内部增加对createTime的维护。每次通过OpenFile访问文件，在读时需要对lastVisitedTime进行更新，在写时需要对lastModifiedTime进行更新，并且需要在OpenFile的析构函数中加入将hdr写回磁盘的语句。
 
 以上的实现假设对i-node的修改不算作对文件本身的修改。
 
 具体实现请查看`code/filesys/openfile.cc`和`code/filesys/filehdr.cc`。
 
+#### 测试
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -f -D
+Bit map file header:
+File type: NORM
+Created: Sat Nov 28 08:09:49 2020
+Modified: Sat Nov 28 08:09:49 2020
+Visited: Sat Nov 28 08:09:49 2020
+FileHeader contents.  File size: 128.  File blocks:
+2
+File contents:
+\f\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
+Directory file header:
+File type: DIR
+Created: Sat Nov 28 08:09:49 2020
+Modified: Sat Nov 28 08:09:49 2020
+Visited: Sat Nov 28 08:09:49 2020
+FileHeader contents.  File size: 120.  File blocks:
+3
+File contents:
+\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
+Bitmap set:
+0, 1, 2, 3,
+Directory contents:
+
+```
+
 #### 突破文件名长度的限制
 
-文件名位于目录项中，我曾尝试将char[]改为char*，但是这样做之后会`segmentation fault`，于是我查看了Linux源代码，发现Linux也是用char[]来表示文件名。
+将char[]改为char*，并修改ADD()和FindIndex()函数中的strncmp()和strncpy()函数即可。
 
-> https://github.com/torvalds/linux/blob/master/include/linux/dcache.h
-
-```cpp
-struct dentry {
-	unsigned char d_iname[DNAME_INLINE_LEN];	/* small names */
-} __randomize_layout;
-```
+#### 测试
 
 ```cpp
-#ifdef CONFIG_64BIT
-# define DNAME_INLINE_LEN 32 /* 192 bytes */
-#else
-# ifdef CONFIG_SMP
-#  define DNAME_INLINE_LEN 36 /* 128 bytes */
-# else
-#  define DNAME_INLINE_LEN 40 /* 128 bytes */
-# endif
-#endif
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -f -cp test/small this_is_a_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_long_fileName -D
+Bit map file header:
+File type: NORM
+Created: Sat Nov 28 09:44:10 2020
+Modified: Sat Nov 28 09:44:10 2020
+Visited: Sat Nov 28 09:44:10 2020
+FileHeader contents.  File size: 128.  File blocks:
+2
+File contents:
+?\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
+Directory file header:
+File type: DIR
+Created: Sat Nov 28 09:44:10 2020
+Modified: Sat Nov 28 09:44:10 2020
+Visited: Sat Nov 28 09:44:10 2020
+FileHeader contents.  File size: 120.  File blocks:
+3
+File contents:
+\1\0\0\0\4\0\0\0h\88\f8\bf\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
+Bitmap set:
+0, 1, 2, 3, 4, 5,
+Directory contents:
+Name: this_is_a_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_long_fileName, Sector: 4
+File type: NORM
+Created: Sat Nov 28 09:44:10 2020
+Modified: Sat Nov 28 09:44:10 2020
+Visited: Sat Nov 28 09:44:10 2020
+FileHeader contents.  File size: 38.  File blocks:
+5
+File contents:
+This is the spring of our discontent.\a
 ```
 
-文件名长度和系统有关。
+#### 结论
 
-> [深入 char * ,char ** ,char a[ ] ,char *a[] 内核](https://blog.csdn.net/daiyutage/article/details/8604720)
->
-> **当定义 char a[10 ] 时，编译器会给数组分配十个单元，每个单元的数据类型为字符。**
->
-> **而定义 char \*s 时， 这是个指针变量，只占四个字节，32位，用来保存一个地址。**
-
-nachos的文件系统独立于main的运行，即main结束之后文件系统依然存在，内容不变。每次main结束之后，分配给char*的内存会被回收，这就导致下一次用同样的地址去找文件名会导致出错。所以我们应该使用char[]数组将文件名永久保存在磁盘中。
-
-
+成功完成exercise2。
 
 ### Exercise 3 扩展文件长度
 
@@ -952,3 +989,11 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 ### Challenge 2 实现pipe机制
 
 > 重定向openfile的输入输出方式，使得前一进程从控制台读入数据并输出至管道，后一进程从管道读入数据并输出至控制台。
+
+## 困难&解决
+
+## segmentation fault
+
+突破文件名长度限制：将文件名从char[]改为char*，之后会报错segmentation fault，这是因为fileHeader中使用了strncmp()函数和strncpy()函数，需要将它们分别改为strcmp和table[i].name = name。
+
+>不能将strncpy函数改为strcpy函数，因为char*指针指向的内存可能不足以储存src字符串，导致segmentation fault。

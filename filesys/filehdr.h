@@ -24,7 +24,6 @@
 #define NumDirect ((SectorSize - 7 * sizeof(int)) / sizeof(int))
 #define MaxFileSize (NumDirect * SectorSize)
 
-
 typedef enum
 {
   NORM,
@@ -76,9 +75,9 @@ public:
   char *GetCreateTime(void){return createTime;}
   void SetPath(char * pth){path = pth;}
   char* GetPath(void){return path;}
-  void SetFileType(char * pth){path = pth;}
+  void SetFileType(FileType tp){fileType = tp;}
   FileType GetFileType(){return fileType;}
-
+  int GetInodeSector(){return inodeSector;}//0 for '.', 1 for '..'
 private:
   int numBytes;               // Number of bytes in the file
   int numSectors;             // Number of data sectors in the file
@@ -91,7 +90,8 @@ private:
   char *createTime;
   char *path;
   FileType fileType;
-  char * GetCurrentTime(){};
+  int inodeSector;//openfile析构时需要保存信息
+  char * GetCurrentTime();
 
 };
 

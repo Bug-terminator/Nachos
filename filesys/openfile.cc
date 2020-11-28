@@ -41,6 +41,8 @@ OpenFile::OpenFile(int sector)
 
 OpenFile::~OpenFile()
 {
+    //lab4 exercise2
+    hdr->WriteBack(hdr->GetInodeSector());
     delete hdr;
 }
 
@@ -140,6 +142,9 @@ OpenFile::ReadAt(char *into, int numBytes, int position)
     // copy the part we want
     bcopy(&buf[position - (firstSector * SectorSize)], into, numBytes);
     delete [] buf;
+
+    //lab4 exercise2
+    hdr->SetLastVisitedTime();
     return numBytes;
 }
 
@@ -182,6 +187,11 @@ OpenFile::WriteAt(char *from, int numBytes, int position)
         synchDisk->WriteSector(hdr->ByteToSector(i * SectorSize), 
 					&buf[(i - firstSector) * SectorSize]);
     delete [] buf;
+    
+    //lab4 exercise2
+    hdr->SetLastModifiedTime();
+    hdr->SetLastVisitedTime();
+
     return numBytes;
 }
 
