@@ -228,8 +228,11 @@ void Interrupt::Idle()
     // is not reached.  Instead, the halt must be invoked by the user program.
 
     DEBUG('i', "Machine idle.  No interrupts to do.\n");
-    printf("No threads ready or runnable, and no pending interrupts.\n");
-    printf("Assuming the program completed.\n");
+    if (!verbose)
+    {
+        printf("No threads ready or runnable, and no pending interrupts.\n");
+        printf("Assuming the program completed.\n");
+    }
     Halt();
 }
 
@@ -239,6 +242,7 @@ void Interrupt::Idle()
 //----------------------------------------------------------------------
 void Interrupt::Halt()
 {
+    if(!verbose)
     printf("Machine halting!\n\n");
     stats->Print();
     Cleanup(); // Never returns.

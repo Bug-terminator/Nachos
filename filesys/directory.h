@@ -19,7 +19,7 @@
 
 #include "openfile.h"
 
-#define FileNameMaxLen 		9	// for simplicity, we assume 
+#define FileNameMaxLen 	20	// for simplicity, we assume 
 					// file names are <= 9 characters long
 
 // The following class defines a "directory entry", representing a file
@@ -37,7 +37,7 @@ class DirectoryEntry {
     // char name[FileNameMaxLen + 1];	// Text name for file, with +1 for 
 
     // lab4 exercise2
-    char *name;
+    char name[FileNameMaxLen + 1];
 					// the trailing '\0'
 };
 

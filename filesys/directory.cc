@@ -90,7 +90,7 @@ int Directory::FindIndex(char *name)
     for (int i = 0; i < tableSize; i++)
     {
         // printf("%d: %s\t%s\n",i, table[i].name, name);
-        if (table[i].inUse && !strcmp(table[i].name, name))
+        if (table[i].inUse && !strncmp(table[i].name, name, FileNameMaxLen))
             return i;
     }
     return -1; // name not in directory
@@ -134,8 +134,8 @@ bool Directory::Add(char *name, int newSector)
         if (!table[i].inUse)
         {
             table[i].inUse = TRUE;
-            // strcpy(table[i].name, name);
-            table[i].name = name;
+            strncpy(table[i].name, name, FileNameMaxLen);
+            // table[i].name = name;
             table[i].sector = newSector;
             return TRUE;
         }

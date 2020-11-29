@@ -118,6 +118,8 @@ Disk::ReadRequest(int sectorNumber, char* data)
     int ticks = ComputeLatency(sectorNumber, FALSE);
 
     ASSERT(!active);				// only one request at a time
+    if(!(sectorNumber >= 0) && (sectorNumber < NumSectors))
+    printf("\n%d %d\n", NumSectors, sectorNumber);
     ASSERT((sectorNumber >= 0) && (sectorNumber < NumSectors));
     
     DEBUG('d', "Reading from sector %d\n", sectorNumber);
@@ -138,6 +140,8 @@ Disk::WriteRequest(int sectorNumber, char* data)
     int ticks = ComputeLatency(sectorNumber, TRUE);
 
     ASSERT(!active);
+    if(!(sectorNumber >= 0) && (sectorNumber < NumSectors))
+    printf("%d %d\n", sectorNumber, NumSectors);
     ASSERT((sectorNumber >= 0) && (sectorNumber < NumSectors));
     
     DEBUG('d', "Writing to sector %d\n", sectorNumber);

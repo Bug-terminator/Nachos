@@ -140,6 +140,10 @@ int main(int argc, char **argv)
 			Copy(*(argv + 1), *(argv + 2));
 			argCount = 3;
 		}
+		else if(!strcmp(*argv, "-Q"))
+		{
+			verbose = true;
+		}
 		else if (!strcmp(*argv, "-p"))
 		{ // print a Nachos file
 			ASSERT(argc > 1);

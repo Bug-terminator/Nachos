@@ -23,11 +23,11 @@
 //lab5 exercise2 NumDirect = 24
 #define NumDirect ((SectorSize - 8 * sizeof(int)) / sizeof(int))
 #define MaxFileSize (NumDirect * SectorSize)
-
+#define TIMELENGTH 24
 //lab4 exercise3
-#define SECPERIND 32                   //每一个间接索引可以表示的物理块数，sectors per indirect
-#define NUMDIRECT 22                   //直接索引表示的最大块数
-#define NUMFIRST NUMDIRECT + SECPERIND //一级索引表达的最大块数
+#define SECPERIND 32                     //每一个间接索引可以表示的物理块数，sectors per indirect
+#define NUMDIRECT 22                     //直接索引表示的最大块数
+#define NUMFIRST (NUMDIRECT + SECPERIND) //一级索引表达的最大块数
 typedef enum
 {
   NORM,
@@ -71,12 +71,12 @@ public:
   void Print(); // Print the contents of the file.
 
   //lab4 exercise2
-  void SetLastVisitedTime(void) { lastVisitedTime = GetCurrentTime(); }
-  char *GetLastVisitedTime(void) { return lastVisitedTime; }
-  void SetLastModifiedTime(void) { lastModifiedTime = GetCurrentTime(); }
-  char *GetLastModifiedTime(void) { return lastModifiedTime; }
-  void SetCreateTime(void) { createTime = GetCurrentTime(); }
-  char *GetCreateTime(void) { return createTime; }
+  void SetLastVisitedTime(void) { time(&lastVisitedTime); }
+  char *GetLastVisitedTime(void) { return TimeToString(lastVisitedTime) ; }
+  void SetLastModifiedTime(void) { time(&lastModifiedTime); }
+  char *GetLastModifiedTime(void) { return TimeToString(lastModifiedTime); }
+  void SetCreateTime(void) { time(&createTime); }
+  char *GetCreateTime(void) { return TimeToString(createTime); }
   void SetPath(char *pth) { path = pth; }
   char *GetPath(void) { return path; }
   void SetFileType(FileType tp) { fileType = tp; }
@@ -89,13 +89,13 @@ private:
                               // block in the file
 
   //lab4 exercise2
-  char *lastVisitedTime;
-  char *lastModifiedTime;
-  char *createTime;
+  time_t lastVisitedTime;
+  time_t lastModifiedTime;
+  time_t createTime;
   char *path;
   FileType fileType;
   int inodeSector; //openfile析构时需要保存信息
-  char *GetCurrentTime();
+  char *TimeToString(time_t t);
 };
 
 #endif // FILEHDR_H

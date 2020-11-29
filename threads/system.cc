@@ -24,13 +24,15 @@ Statistics *stats;           // performance metrics
 Timer *timer;                // the hardware timer device,
                              // for invoking context switches
 
-// #ifdef FILESYS_NEEDED
+//lab4
+bool verbose = FALSE;
+#ifdef FILESYS_NEEDED
 FileSystem *fileSystem;
-// #endif
+#endif
 
-// #ifdef FILESYS //为了代码补全，暂时注释
+#ifdef FILESYS 
 SynchDisk *synchDisk;
-// #endif
+#endif
 
 #ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB
 Machine *machine;   // user program memory and registers
@@ -216,6 +218,7 @@ void Initialize(int argc, char **argv)
 //----------------------------------------------------------------------
 void Cleanup()
 {
+    if(!verbose)
     printf("\nCleaning up...\n");
 #ifdef NETWORK
     delete postOffice;

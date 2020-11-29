@@ -69,15 +69,19 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
     }
     else //二级索引
     {
-        if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1) //(numSectors - NUMFIRST - 1)/32 + 1表示
-            return FALSE;                                                                      //二級索引中的一級索引，最后的+1为二级索引
+        if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1)                                                                       //(numSectors - NUMFIRST - 1)/32 + 1表示
+            return FALSE;                                 //二級索引中的一級索引，最后的+1为二级索引本身
         for (int i = 0; i < NUMDIRECT; i++)
+        {
             dataSectors[i] = freeMap->Find();
+        }
 
         int sector = freeMap->Find(); //for primary index
         int buffer[SECPERIND];
         for (int i = 0; i < SECPERIND; ++i)
+        {
             buffer[i] = freeMap->Find();
+        }
         dataSectors[NUMDIRECT] = sector;
         synchDisk->WriteSector(sector, (char *)buffer);
 
@@ -90,9 +94,12 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
             secBuffer[i] = sector;
             int firBuffer[SECPERIND];
             //是否是最后一轮？
-            int limit_j = (i == (numSectors - NUMFIRST - 1) / 32) ? SECPERIND : (numSectors - NUMFIRST) % SECPERIND;
+            int limit_j = (i != (numSectors - NUMFIRST - 1) / 32) ? SECPERIND : (numSectors - NUMFIRST) % SECPERIND;
             for (int j = 0; j < limit_j; ++j)
+            {
                 firBuffer[j] = freeMap->Find();
+            }
+
             synchDisk->WriteSector(sector, (char *)firBuffer);
         }
         synchDisk->WriteSector(sector2, (char *)secBuffer);
@@ -184,12 +191,12 @@ void FileHeader::Deallocate(BitMap *freeMap)
             synchDisk->ReadSector(secBuffer[i], (char *)firBuffer);
 
             //是否是最后一轮？
-            int limit_j = (i == (numSectors - NUMFIRST - 1) / 32) ? SECPERIND : (numSectors - NUMFIRST) % SECPERIND;
+            int limit_j = (i != (numSectors - NUMFIRST - 1) / 32) ? SECPERIND : (numSectors - NUMFIRST) % SECPERIND;
             //clear 一级索引中的物理块
             for (int j = 0; j < limit_j; ++j)
             {
-                ASSERT(freeMap->Test((int)firBuffer[i])); // ought to be marked!
-                freeMap->Clear((int)firBuffer[i]);
+                ASSERT(freeMap->Test((int)firBuffer[j])); // ought to be marked!
+                freeMap->Clear((int)firBuffer[j]);
             }
             //clear二级索引中的一级索引
             ASSERT(freeMap->Test((int)secBuffer[i])); // ought to be marked!
@@ -284,10 +291,10 @@ int FileHeader::FileLength()
 //----------------------------------------------------------------------
 void printChar(char c)
 {
-    if('\040' <= c && c <= '176')
-    printf("%c", c);
+    if ('\040' <= c && c <= '176')
+        printf("%c", c);
     else
-    printf("\\%x", (unsigned char)c);
+        printf("\\%x", (unsigned char)c);
 }
 
 //----------------------------------------------------------------------
@@ -302,16 +309,14 @@ void FileHeader::Print()
     char *data = new char[SectorSize];
 
     //lab4 exercise2
-    printf("----------------------------------------------\n");
+    // printf("----------------------------------------------\n");
     printf("File type: %s\n", enumTostirng[fileType]);
-    printf("Created: %s", createTime);
-    printf("Modified: %s", lastModifiedTime);
-    printf("Visited: %s", lastVisitedTime);
+    printf("Created: %s", GetCreateTime());
+    printf("Modified: %s", GetLastModifiedTime());
+    printf("Visited: %s", GetLastVisitedTime());
+    
 
     printf("FileHeader contents.  File size: %d.  File blocks:\n", numBytes);
-    for (i = 0; i < numSectors; i++)
-        printf("%d ", dataSectors[i]);
-
     //lab4 exercise3
     int ii, iii;                        // For single / double indirect indexing
     int singleIndirectIndex[SECPERIND]; // used to restore the indexing map
@@ -329,7 +334,7 @@ void FileHeader::Print()
         {
             printf("\n  Double indirect indexing: (mapping table sector: %d)", dataSectors[NUMDIRECT + 1]);
             synchDisk->ReadSector(dataSectors[NUMDIRECT + 1], (char *)doubleIndirectIndex);
-            for (i = NUMDIRECT + SECPERIND, ii = 0; (i < numSectors) && (ii < SECPERIND); ii++)
+            for (i = NUMFIRST, ii = 0; (i < numSectors) && (ii < SECPERIND); ii++)
             {
                 printf("\n    single indirect indexing: (mapping table sector: %d)\n      ", doubleIndirectIndex[ii]);
                 synchDisk->ReadSector(doubleIndirectIndex[ii], (char *)singleIndirectIndex);
@@ -338,48 +343,53 @@ void FileHeader::Print()
             }
         }
     }
-    
-    printf("\nFile contents:\n");
-    for (i = k = 0; (i < numSectors) && (i < NUMDIRECT); i++)
-    {
-        synchDisk->ReadSector(dataSectors[i], data);
-        for (j = 0; (j < SectorSize) && (k < numBytes); j++, k++)
-            printChar(data[j]);
-        printf("\n");
-    }
-    if (numSectors > NUMDIRECT) {
-        synchDisk->ReadSector(dataSectors[NUMDIRECT], (char*)singleIndirectIndex);
-        for (i = NUMDIRECT, ii = 0; (i < numSectors) && (ii < SECPERIND); i++, ii++) {
-            synchDisk->ReadSector(singleIndirectIndex[ii], data);
-            for (j = 0; (j < SectorSize) && (k < numBytes); j++, k++)
-                printChar(data[j]);
-            printf("\n");
-        }
-        if (numSectors > NUMFIRST) {
-            synchDisk->ReadSector(dataSectors[NUMDIRECT+1], (char*)doubleIndirectIndex);
-            for (i = NUMFIRST, ii = 0; (i < numSectors) && (ii < SECPERIND); ii++) {
-                synchDisk->ReadSector(doubleIndirectIndex[ii], (char*)singleIndirectIndex);
-                for (iii = 0; (i < numSectors) && (iii < SECPERIND); i++, iii++) {
-                    synchDisk->ReadSector(singleIndirectIndex[iii], data);
-                    for (j = 0; (j < SectorSize) && (k < numBytes); j++, k++)
-                        printChar(data[j]);
-                    printf("\n");
-                }
-            }
-        }
-    }
-    printf("----------------------------------------------\n");
+
+    printf("\n");
+    // printf("\nFile contents:\n");
+    // for (i = k = 0; (i < numSectors) && (i < NUMDIRECT); i++)
+    // {
+    //     synchDisk->ReadSector(dataSectors[i], data);
+    //     for (j = 0; (j < SectorSize) && (k < numBytes); j++, k++)
+    //         printChar(data[j]);
+    //     printf("\n");
+    // }
+    // if (numSectors > NUMDIRECT)
+    // {
+    //     synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)singleIndirectIndex);
+    //     for (i = NUMDIRECT, ii = 0; (i < numSectors) && (ii < SECPERIND); i++, ii++)
+    //     {
+    //         synchDisk->ReadSector(singleIndirectIndex[ii], data);
+    //         for (j = 0; (j < SectorSize) && (k < numBytes); j++, k++)
+    //             printChar(data[j]);
+    //         printf("\n");
+    //     }
+    //     if (numSectors > NUMFIRST)
+    //     {
+    //         synchDisk->ReadSector(dataSectors[NUMDIRECT + 1], (char *)doubleIndirectIndex);
+    //         for (i = NUMFIRST, ii = 0; (i < numSectors) && (ii < SECPERIND); ii++)
+    //         {
+    //             synchDisk->ReadSector(doubleIndirectIndex[ii], (char *)singleIndirectIndex);
+    //             for (iii = 0; (i < numSectors) && (iii < SECPERIND); i++, iii++)
+    //             {
+    //                 synchDisk->ReadSector(singleIndirectIndex[iii], data);
+    //                 for (j = 0; (j < SectorSize) && (k < numBytes); j++, k++)
+    //                     printChar(data[j]);
+    //                 printf("\n");
+    //             }
+    //         }
+    //     }
+    // }
+    // printf("----------------------------------------------\n");
     delete[] data;
 }
 
 //----------------------------------------------------------------------
 // FileHeader::GetCurrentTime
 //----------------------------------------------------------------------
-char *FileHeader::GetCurrentTime()
+char *FileHeader::TimeToString(time_t t)
 {
-    time_t t;
     struct tm *timeinfo;
-    time(&t);
     timeinfo = localtime(&t);
     return asctime(timeinfo);
 }
+

@@ -21,11 +21,12 @@
 #include <vector>
 #include <string>
 using namespace std;
-//新增
+//lab1新增
 extern Thread *threadPtr[];
 extern bool isAllocatable[];
 extern int threadCount;
 extern char *transEnum[];
+extern bool verbose;
 
 // Initialization and cleanup routines
 extern void Initialize(int argc, char **argv); // Initialization,

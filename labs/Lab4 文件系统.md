@@ -401,11 +401,23 @@ This is the spring of our discontent.\a
 
 #### 反思
 
-> [linux 页目录项-github](https://github.com/torvalds/linux/blob/master/include/linux/dcache.h)
+> [linux dentry-github](https://github.com/torvalds/linux/blob/master/include/linux/dcache.h)
 >
 > [深入 char * ,char ** ,char a[] ,char *a[] 内核-CSDN](https://blog.csdn.net/daiyutage/article/details/8604720)
 
-Linux中文件名的存储方式为char[],这引起了我的反思。为什么放着空间更小，表达长度更多的的char*不用，要选择固定长度的，占空间更大的char[]？因为char表示的内存在主机关机之后会被回收，下一次开机，用同样的内存地址去寻找必然导致出错。不过好在我们的Nachos是一个虚拟操作系统，它的生命周期本就是宿主主机一次开机的时间内，所以用char\*也是可以的。
+Linux中文件名的存储方式为char[],这引起了我的反思。为什么放着空间更小，表达长度更多的的char*不用，要选择固定长度的，占空间更大的char[]？因为char表示的内存在主机关机之后会被回收，下一次开机，用同样的内存地址去寻找必然导致出错。而且在exercise3中，使用char\*的变量都出现了乱码，directory中print name时会报segmentation fault，我尚不清楚原因是为何，希望老师能指点一二。
+
+```cpp
+//乱码
+Created: KSt10moneypunctIcLb1EE13negative_signEvModified: KSt10moneypunctIcLb1EE13negative_signEvVisited: 
+KSt10moneypunctIcLb1EE13negative_signEvFileHeader 
+```
+
+#### 重新扩展文件属性
+
+将时间类的变量用`time_t (sizeof(time_t) = 4)`来存储，然后调用`timeToString()`函数进行转换。文件名还是要用char[]来存储，文件名最大长度可以通过修改FileNameMaxLen宏，考虑到nachos磁盘空间实在有些小，我暂时将其修改为20，如果以后有需要，再修改。
+
+> linux还专门写了个match()函数，而不用strncmp() https://zhuanlan.zhihu.com/p/60593133
 
 ### Exercise 3 扩展文件长度
 
@@ -428,139 +440,253 @@ Nachos的磁盘大小块数为32\*32 = 1024块（`code/machine/disk.h`)，直接
 ```
 
 ```cpp
-//----------------------------------------------------------------------
-// lab4 突破文件长度限制
-// 根据文件长度分配内存需
-// 要分为两步：先分配直接
-// 索引，再分配一级索引,
-// 最后分配二级索引。
-//----------------------------------------------------------------------
 bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 {
     numBytes = fileSize;
     numSectors = divRoundUp(fileSize, SectorSize);
-    if (freeMap->NumClear() < numSectors)
+    if (numSectors <= NUMDIRECT) //直接索引
     {
-        DEBUG('d', "There is not enough space.\tfile:%s\tline:%d\n", __FILE__, __LINE__);//d means disk
-        return FALSE; // not enough space
-    }
-    //直接索引
-    if (numSectors <= DIRECT_NUM)
-    {
-        DEBUG('d', "Using direct allocation.\n");
+        if (freeMap->NumClear() < numSectors)
+            return FALSE; // not enough space
+
         for (int i = 0; i < numSectors; i++)
             dataSectors[i] = freeMap->Find();
     }
-    //一级索引
-    else if (numSectors <= DIRECT_NUM + PRIMARY_NUM)
+    else if (numSectors <= NUMFIRST) //一级索引
     {
-        DEBUG('d', "Using indirect allocation.\n");
-        //直接索引
-        for (int i = 0; i < DIRECT_NUM; i++)
-            dataSectors[i] = freeMap->Find();
-        //一级索引
-        int primary[PRIMARY_NUM];
-        //将物理块号存入一级索引表中
-        for (int i = 0; i < numSectors - DIRECT_NUM; ++i)
-            primary[i] = freeMap->Find();
-        //为一级索引表分配物理空间
-        int numSector = freeMap->Find();
-        if (numSector == -1)
-        {
-            DEBUG('d', "No space for primary table.\tfile:%s\tline:%d\n", __FILE__, __LINE__);
+        if (freeMap->NumClear() < numSectors + 1) //+1 是因为一级索引
             return FALSE;
-        }
-        //将一级索引表表号写入dataSectors中
-        dataSectors[DIRECT_NUM] = numSector;
-        //将一级索引表写入磁盘
-        synchDisk->WriteSector(numSector, (char *)primary);
+        for (int i = 0; i < NUMDIRECT; i++)
+            dataSectors[i] = freeMap->Find();
+        int sector = freeMap->Find(); //for primary index
+        int buffer[SECPERIND];
+        for (int i = 0; i < numSectors - NUMDIRECT; ++i)
+            buffer[i] = freeMap->Find();
+        dataSectors[NUMDIRECT] = sector;
+        synchDisk->WriteSector(sector, (char *)buffer);
     }
-    //文件长度超过限制
-    else
+    else //二级索引
     {
-        DEBUG('d', "File length exceed!\tfile:%s\tline:%d\n", __FILE__, __LINE__);
-        return FALSE;
+        if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1)                                                                       //(numSectors - NUMFIRST - 1)/32 + 1表示
+            return FALSE;                                 //二級索引中的一級索引，最后的+1为二级索引本身
+        for (int i = 0; i < NUMDIRECT; i++)
+        {
+            dataSectors[i] = freeMap->Find();
+        }
+
+        int sector = freeMap->Find(); //for primary index
+        int buffer[SECPERIND];
+        for (int i = 0; i < SECPERIND; ++i)
+        {
+            buffer[i] = freeMap->Find();
+        }
+        dataSectors[NUMDIRECT] = sector;
+        synchDisk->WriteSector(sector, (char *)buffer);
+
+        int sector2 = freeMap->Find(); //for secondary index
+        dataSectors[NUMDIRECT + 1] = sector2;
+        int secBuffer[SECPERIND];
+        for (int i = 0; i < (numSectors - NUMFIRST - 1) / 32 + 1; ++i)
+        {
+            sector = freeMap->Find();
+            secBuffer[i] = sector;
+            int firBuffer[SECPERIND];
+            //是否是最后一轮？
+            int limit_j = (i != (numSectors - NUMFIRST - 1) / 32) ? SECPERIND : (numSectors - NUMFIRST) % SECPERIND;
+            for (int j = 0; j < limit_j; ++j)
+            {
+                firBuffer[j] = freeMap->Find();
+            }
+
+            synchDisk->WriteSector(sector, (char *)firBuffer);
+        }
+        synchDisk->WriteSector(sector2, (char *)secBuffer);
     }
-    createTime = stats->totalTicks; //lab4 文件创造时间
+
+    //lab4 exercise2
+    SetCreateTime();
+    SetLastModifiedTime();
+    SetLastVisitedTime();
     return TRUE;
 }
 ```
 
-相应地，我们需要对Deallocate函数做出改变：
-
-```cpp
-void FileHeader::Deallocate(BitMap *freeMap)
-{
-    //直接索引
-    if (numSectors <= DIRECT_NUM)
-    {
-        for (int i = 0; i < numSectors; i++)
-        {
-            ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
-            freeMap->Clear((int)dataSectors[i]);
-        }
-    }
-    //一级索引
-    else if (numSectors <= DIRECT_NUM + PRIMARY_NUM)
-    {
-        //直接索引
-        for (int i = 0; i < DIRECT_NUM; i++)
-        {
-            ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
-            freeMap->Clear((int)dataSectors[i]);
-        }
-        //在内存中初始化一个一级索引数组
-        int primary[PRIMARY_NUM];
-        //取出一级索引表表号
-        int numSector = dataSectors[DIRECT_NUM];
-        //将一级索引表读入内存
-        synchDisk->ReadSector(numSector, (char *)primary);
-        //清除一级索引表的磁盘空间
-        ASSERT(freeMap->Test((int)numSector)); // ought to be marked!
-        freeMap->Clear((int)numSector);
-        //释放一级索引表中的空间
-        for (int i = 0; i < numSectors - DIRECT_NUM; ++i)
-        {
-            ASSERT(freeMap->Test((int)primary[i])); // ought to be marked!
-            freeMap->Clear((int)primary[i]);
-        }
-    }
-}
-```
-
-可以发现：deallocate是allocate的一个逆向操作（清楚这一点可以大大降低编码的难度）。
+而deallocate为allocate的逆向操作，这里不再赘述。
 
 #### ByteToSector()
 
-每次执行地址转换的函数是ByteToSector()，因此我们还需要对它进行改变。
+每次执行地址转换的函数是ByteToSector()，改变了索引方式之后，我们也需要对它进行改变。
 
 ```cpp
-//lab4 改为间接索引
 int FileHeader::ByteToSector(int offset)
 {
-    int v_index = offset / SectorSize; //虚拟块号
-    //虚拟索引号不能大于直接索引+间接索引的总和
-    ASSERT(v_index < DIRECT_NUM + PRIMARY_NUM);
-    //直接索引
-    if (v_index < DIRECT_NUM)
+    int secNum = offset / SectorSize;
+    if (secNum < NUMDIRECT) //直接索引
+        return dataSectors[secNum];
+    else if (secNum < NUMFIRST) //一级索引
     {
-        return dataSectors[v_index];
+        int buffer[SECPERIND];
+        synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)buffer);
+        return buffer[secNum - NumDirect];
     }
-    //间接索引
-    else
+    else //二级索引
     {
-        //在内存中初始化一个一级索引数组
-        int primary[PRIMARY_NUM];
-        //取出一级索引表表号
-        int numSector = dataSectors[DIRECT_NUM];
-        //将一级索引表读入内存
-        synchDisk->ReadSector(numSector, (char *)primary);
-        return primary[v_index - DIRECT_NUM];
+        int secBuffer[SECPERIND], firBuffer[SECPERIND];
+        synchDisk->ReadSector(dataSectors[NUMDIRECT + 1], (char *)secBuffer);
+        const int index = (secNum - NUMFIRST) / SECPERIND, offset = (secNum - NUMFIRST) % SECPERIND;
+        synchDisk->ReadSector(secBuffer[index], (char *)firBuffer);
+        return firBuffer[offset];
     }
 }
+//原始版本
 ```
 
-还有一些琐碎的改动,请查看`code/filesys/filehdr.cc`;
+关于其他代码的改动(deallocate(), print(), etc.)，请查看`code/filesys/filehdr.cc`;
+
+#### 测试
+
+> 这里我引用了github一位学长的测试脚本，位于`code\filesys\test\exercise3_large_file_test.sh`中，该脚本文件的作用为
+>
+> 产生一个大文件，复制进nachos，然后删除该文件。我们可以通过修改filehdr::print()来查看我们程序的正确性。
+>
+> [Source--github](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
+
+本次测试产生了一个Nachos物理内存(总共128KB）范围内理论上能够容纳的最大的文件(123KB)，如果脚本运行成功，那么可以证明我们的间接索引实现成功。在terminal中输入`test/exercise3_large_file_test.sh`可查看结果：
+
+```shell
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ test/exercise3_large_file_test.sh
+Generate the large file for double indirect indexing
+123+0 records in
+123+0 records out
+125952 bytes (126 kB) copied, 0.0378735 s, 3.3 MB/s
+=== format the DISK ===
+=== copies file "largeFile" from UNIX to Nachos ===
+sectorNumber = -1219460751       //这里发生溢出，原因不明，正在排查中。
+Assertion failed: line 123, file "../machine/disk.cc"
+Aborted
+=== prints the contents of the entire file system ===
+Bit map file header:
+File type: NORM
+Created: Sun Nov 29 07:36:56 2020
+Modified: Sun Nov 29 07:36:56 2020
+Visited: Sun Nov 29 07:36:56 2020
+FileHeader contents.  File size: 128.  File blocks:
+  Direct indexing:
+    2
+Directory file header:
+File type: DIR
+Created: Sun Nov 29 07:36:56 2020
+Modified: Sun Nov 29 07:36:56 2020
+Visited: Sun Nov 29 07:36:56 2020
+FileHeader contents.  File size: 320.  File blocks:
+  Direct indexing:
+    3 4 5
+Bitmap set:
+0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 322, 323, 324, 325, 326, 327, 328, 329, 330, 331, 332, 333, 334, 335, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345, 346, 347, 348, 349, 350, 351, 352, 353, 354, 355, 356, 357, 358, 359, 360, 361, 362, 363, 364, 365, 366, 367, 368, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386, 387, 388, 389, 390, 391, 392, 393, 394, 395, 396, 397, 398, 399, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418, 419, 420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431, 432, 433, 434, 435, 436, 437, 438, 439, 440, 441, 442, 443, 444, 445, 446, 447, 448, 449, 450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463, 464, 465, 466, 467, 468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 478, 479, 480, 481, 482, 483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 493, 494, 495, 496, 497, 498, 499, 500, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 513, 514, 515, 516, 517, 518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550, 551, 552, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571, 572, 573, 574, 575, 576, 577, 578, 579, 580, 581, 582, 583, 584, 585, 586, 587, 588, 589, 590, 591, 592, 593, 594, 595, 596, 597, 598, 599, 600, 601, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 619, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 632, 633, 634, 635, 636, 637, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656, 657, 658, 659, 660, 661, 662, 663, 664, 665, 666, 667, 668, 669, 670, 671, 672, 673, 674, 675, 676, 677, 678, 679, 680, 681, 682, 683, 684, 685, 686, 687, 688, 689, 690, 691, 692, 693, 694, 695, 696, 697, 698, 699, 700, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715, 716, 717, 718, 719, 720, 721, 722, 723, 724, 725, 726, 727, 728, 729, 730, 731, 732, 733, 734, 735, 736, 737, 738, 739, 740, 741, 742, 743, 744, 745, 746, 747, 748, 749, 750, 751, 752, 753, 754, 755, 756, 757, 758, 759, 760, 761, 762, 763, 764, 765, 766, 767, 768, 769, 770, 771, 772, 773, 774, 775, 776, 777, 778, 779, 780, 781, 782, 783, 784, 785, 786, 787, 788, 789, 790, 791, 792, 793, 794, 795, 796, 797, 798, 799, 800, 801, 802, 803, 804, 805, 806, 807, 808, 809, 810, 811, 812, 813, 814, 815, 816, 817, 818, 819, 820, 821, 822, 823, 824, 825, 826, 827, 828, 829, 830, 831, 832, 833, 834, 835, 836, 837, 838, 839, 840, 841, 842, 843, 844, 845, 846, 847, 848, 849, 850, 851, 852, 853, 854, 855, 856, 857, 858, 859, 860, 861, 862, 863, 864, 865, 866, 867, 868, 869, 870, 871, 872, 873, 874, 875, 876, 877, 878, 879, 880, 881, 882, 883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 893, 894, 895, 896, 897, 898, 899, 900, 901, 902, 903, 904, 905, 906, 907, 908, 909, 910, 911, 912, 913, 914, 915, 916, 917, 918, 919, 920, 921, 922, 923, 924, 925, 926, 927, 928, 929, 930, 931, 932, 933, 934, 935, 936, 937, 938, 939, 940, 941, 942, 943, 944, 945, 946, 947, 948, 949, 950, 951, 952, 953, 954, 955, 956, 957, 958, 959, 960, 961, 962, 963, 964, 965, 966, 967, 968, 969, 970, 971, 972, 973, 974, 975, 976, 977, 978, 979, 980, 981, 982, 983, 984, 985, 986, 987, 988, 989, 990, 991, 992, 993, 994, 995, 996, 997, 998, 999, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020, 1021, 1022,
+Directory contents:
+Name: largeFile, Sector: 6
+File type: NORM
+Created: Sun Nov 29 07:36:56 2020
+Modified: Sun Nov 29 07:36:56 2020
+Visited: Sun Nov 29 07:36:56 2020
+FileHeader contents.  File size: 125952.  File blocks:
+  Direct indexing:
+    7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28
+  Indirect indexing: (mapping table sector: 29)
+    30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61
+  Double indirect indexing: (mapping table sector: 62)
+    single indirect indexing: (mapping table sector: 63)
+      64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95
+    single indirect indexing: (mapping table sector: 96)
+      97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128
+    single indirect indexing: (mapping table sector: 129)
+      130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161
+    single indirect indexing: (mapping table sector: 162)
+      163 164 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194
+    single indirect indexing: (mapping table sector: 195)
+      196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225 226 227
+    single indirect indexing: (mapping table sector: 228)
+      229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260
+    single indirect indexing: (mapping table sector: 261)
+      262 263 264 265 266 267 268 269 270 271 272 273 274 275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293
+    single indirect indexing: (mapping table sector: 294)
+      295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 324 325 326
+    single indirect indexing: (mapping table sector: 327)
+      328 329 330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359
+    single indirect indexing: (mapping table sector: 360)
+      361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 378 379 380 381 382 383 384 385 386 387 388 389 390 391 392
+    single indirect indexing: (mapping table sector: 393)
+      394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425
+    single indirect indexing: (mapping table sector: 426)
+      427 428 429 430 431 432 433 434 435 436 437 438 439 440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458
+    single indirect indexing: (mapping table sector: 459)
+      460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 486 487 488 489 490 491
+    single indirect indexing: (mapping table sector: 492)
+      493 494 495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524
+    single indirect indexing: (mapping table sector: 525)
+      526 527 528 529 530 531 532 533 534 535 536 537 538 539 540 541 542 543 544 545 546 547 548 549 550 551 552 553 554 555 556 557
+    single indirect indexing: (mapping table sector: 558)
+      559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590
+    single indirect indexing: (mapping table sector: 591)
+      592 593 594 595 596 597 598 599 600 601 602 603 604 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623
+    single indirect indexing: (mapping table sector: 624)
+      625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 648 649 650 651 652 653 654 655 656
+    single indirect indexing: (mapping table sector: 657)
+      658 659 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689
+    single indirect indexing: (mapping table sector: 690)
+      691 692 693 694 695 696 697 698 699 700 701 702 703 704 705 706 707 708 709 710 711 712 713 714 715 716 717 718 719 720 721 722
+    single indirect indexing: (mapping table sector: 723)
+      724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755
+    single indirect indexing: (mapping table sector: 756)
+      757 758 759 760 761 762 763 764 765 766 767 768 769 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788
+    single indirect indexing: (mapping table sector: 789)
+      790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 810 811 812 813 814 815 816 817 818 819 820 821
+    single indirect indexing: (mapping table sector: 822)
+      823 824 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854
+    single indirect indexing: (mapping table sector: 855)
+      856 857 858 859 860 861 862 863 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 880 881 882 883 884 885 886 887
+    single indirect indexing: (mapping table sector: 888)
+      889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 918 919 920
+    single indirect indexing: (mapping table sector: 921)
+      922 923 924 925 926 927 928 929 930 931 932 933 934 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953
+    single indirect indexing: (mapping table sector: 954)
+      955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986
+    single indirect indexing: (mapping table sector: 987)
+      988 989 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019
+    single indirect indexing: (mapping table sector: 1020)
+      1021 1022
+
+=== remove the file "largeFile" from Nachos ===
+=== prints the contents of the entire file system again ===
+Bit map file header:
+File type: NORM
+Created: Sun Nov 29 07:36:56 2020
+Modified: Sun Nov 29 07:36:56 2020
+Visited: Sun Nov 29 07:36:56 2020
+FileHeader contents.  File size: 128.  File blocks:
+  Direct indexing:
+    2
+Directory file header:
+File type: DIR
+Created: Sun Nov 29 07:36:56 2020
+Modified: Sun Nov 29 07:36:56 2020
+Visited: Sun Nov 29 07:36:56 2020
+FileHeader contents.  File size: 320.  File blocks:
+  Direct indexing:
+    3 4 5
+Bitmap set:
+0, 1, 2, 3, 4, 5,
+Directory contents:
+
+```
+
+#### 结论
+
+成功实现间接索引，并且能够表示Nachos物理磁盘的最大容量。
+
+#### TODO
+
+测试byteToSector的正确性。
 
 ### Exercise 4 实现多级目录
 
@@ -1008,3 +1134,40 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 突破文件名长度限制：将文件名从char[]改为char*，之后会报错segmentation fault，这是因为fileHeader中使用了strncmp()函数和strncpy()函数，需要将它们分别改为strcmp和table[i].name = name。
 
 >不能将strncpy函数改为strcpy函数，因为char*指针指向的内存可能不足以储存src字符串，导致segmentation fault。
+
+## 160 - 54 = 170?
+
+在exercise3debug的时候我写了如下代码：
+
+```cpp
+        printf("numSectors = %d, NUMFIRST = %d, numSectors - NUMFIRST = %d,numSectors = %d, NUMFIRST = %d\n", numSectors, NUMFIRST, numSectors - NUMFIRST, numSectors, NUMFIRST);
+```
+
+运行结果为：
+
+```cpp
+numSectors = 160, NUMFIRST = 54, numSectors - NUMFIRST = 170,numSectors = 160, NUMFIRST = 54
+```
+
+检查之后发现宏定义出错：
+
+```cpp
+#define NUMFIRST NUMDIRECT + SECPERIND//错误
+#define NUMFIRST (NUMDIRECT + SECPERIND)//正确
+```
+
+## Assertion failed: line 123, file "../machine/disk.cc"
+
+在exercise3中将大文件copy进nachos会报错（在exercise3的测试结果中有标注），但是不影响测试结果。这是报错的代码：
+
+```cpp
+void
+Disk::ReadRequest(int sectorNumber, char* data)
+{
+  	...
+    ASSERT((sectorNumber >= 0) && (sectorNumber < NumSectors));
+    ...
+}
+```
+
+我打印了一下这个值，为`-1219460751`，证明某处发生了越界。（正在排查中）
