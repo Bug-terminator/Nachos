@@ -561,7 +561,8 @@ Generate the large file for double indirect indexing
 125952 bytes (126 kB) copied, 0.0378735 s, 3.3 MB/s
 === format the DISK ===
 === copies file "largeFile" from UNIX to Nachos ===
-sectorNumber = -1219460751       //这里发生溢出，原因不明，正在排查中。
+sectorNumber = -1219460751       //这里出错，在困难&解决中将详细阐述
+																 //虽然出错了但是运行结果正确，很迷
 Assertion failed: line 123, file "../machine/disk.cc"
 Aborted
 === prints the contents of the entire file system ===
@@ -677,16 +678,11 @@ FileHeader contents.  File size: 320.  File blocks:
 Bitmap set:
 0, 1, 2, 3, 4, 5,
 Directory contents:
-
 ```
 
 #### 结论
 
-成功实现间接索引，并且能够表示Nachos物理磁盘的最大容量。
-
-#### TODO
-
-测试byteToSector的正确性。
+成功实现二级间接索引，并且能够表示Nachos物理磁盘的最大容量。
 
 ### Exercise 4 实现多级目录
 
@@ -1134,10 +1130,12 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 突破文件名长度限制：将文件名从char[]改为char*，之后会报错segmentation fault，这是因为fileHeader中使用了strncmp()函数和strncpy()函数，需要将它们分别改为strcmp和table[i].name = name。
 
 >不能将strncpy函数改为strcpy函数，因为char*指针指向的内存可能不足以储存src字符串，导致segmentation fault。
+>
+>不过最终我还是采用了char[]来存储文件名，原因在之前exercise2中的反思有说过。
 
 ## 160 - 54 = 170?
 
-在exercise3debug的时候我写了如下代码：
+在exercise3 debug的时候我写了如下代码：
 
 ```cpp
         printf("numSectors = %d, NUMFIRST = %d, numSectors - NUMFIRST = %d,numSectors = %d, NUMFIRST = %d\n", numSectors, NUMFIRST, numSectors - NUMFIRST, numSectors, NUMFIRST);
@@ -1158,7 +1156,7 @@ numSectors = 160, NUMFIRST = 54, numSectors - NUMFIRST = 170,numSectors = 160, N
 
 ## Assertion failed: line 123, file "../machine/disk.cc"
 
-在exercise3中将大文件copy进nachos会报错（在exercise3的测试结果中有标注），但是不影响测试结果。这是报错的代码：
+在exercise3中将大文件copy进nachos会报错（在exercise3的测试结果中有标注）。这是报错对应行的代码：
 
 ```cpp
 void
@@ -1170,4 +1168,34 @@ Disk::ReadRequest(int sectorNumber, char* data)
 }
 ```
 
-我打印了一下这个值，为`-1219460751`，证明某处发生了越界。（正在排查中）
+我打印了一下这个值，为`-1219460751`，错误应该发生在某个调用它的函数中。而调用ReadRequest的函数只有SynchDisk::ReadSector，找出所有调用ReadSector的地方，发现全部位于filehdr.cc中，还有一处位于openfile.cc::ReadAt()中，而这个函数会反过来调用filehdr.cc::ByteToSector(),因此我们不仅在每一个ReadSector函数进入之前，判断一下传入的参数的值，还需要在filehdr.cc::ByteToSector() return的地方也需要判断一下return的值，如果小于零，则打印一下。最后找到bug：
+
+```cpp
+int FileHeader::ByteToSector(int offset)
+{
+    ...
+    else if (secNum < NUMFIRST) //一级索引
+    {
+        return buffer[secNum - NumDirect];//错误
+        return buffer[secNum - NUMDIRECT];//正确
+    }
+    ...
+```
+
+> 这个bug真的坑爹，都怪自己当初定义宏的时候没注意，像这样两个一样名字的宏在vscode代码补全下很容易就出错了。
+
+再次运行脚本：
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ test/exercise3_large_file_test.sh
+Generate the large file for double indirect indexing
+123+0 records in
+123+0 records out
+125952 bytes (126 kB) copied, 0.033861 s, 3.7 MB/s
+=== format the DISK ===
+=== copies file "largeFile" from UNIX to Nachos ===
+=== prints the contents of the entire file system ===
+Bit map file header:
+```
+
+没有再报错了，其他与exercise3中的结果一致，不再赘述。

@@ -8,6 +8,7 @@
         "utility": "cpp",
         "*.tcc": "cpp",
         "fstream": "cpp",
-        "string": "cpp"
+        "string": "cpp",
+        "ostream": "cpp"
     }
 }

@@ -69,8 +69,8 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
     }
     else //二级索引
     {
-        if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1)                                                                       //(numSectors - NUMFIRST - 1)/32 + 1表示
-            return FALSE;                                 //二級索引中的一級索引，最后的+1为二级索引本身
+        if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1) //(numSectors - NUMFIRST - 1)/32 + 1表示
+            return FALSE;                                                                      //二級索引中的一級索引，最后的+1为二级索引本身
         for (int i = 0; i < NUMDIRECT; i++)
         {
             dataSectors[i] = freeMap->Find();
@@ -154,8 +154,9 @@ void FileHeader::Deallocate(BitMap *freeMap)
             ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
             freeMap->Clear((int)dataSectors[i]);
         }
-
         int buffer[SECPERIND];
+        if (dataSectors[NUMDIRECT] < 0)
+            cout << 111111111 << endl;
         synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)buffer);
         for (int i = 0; i < numSectors - NUMDIRECT; ++i)
         {
@@ -168,12 +169,13 @@ void FileHeader::Deallocate(BitMap *freeMap)
         //直接索引表
         for (int i = 0; i < NUMDIRECT + 2; i++)
         {
-            ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
+            // ASSERT(freeMap->Test((int)dataSectors[i])); // ought to be marked!
             freeMap->Clear((int)dataSectors[i]);
         }
-
         //一级索引表
         int buffer[SECPERIND];
+        if (dataSectors[NUMDIRECT] < 0)
+            cout << 111111112 << endl;
         synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)buffer);
         for (int i = 0; i < SECPERIND; ++i)
         {
@@ -183,11 +185,15 @@ void FileHeader::Deallocate(BitMap *freeMap)
 
         //二级索引表
         int secBuffer[SECPERIND];
+        if (dataSectors[NUMDIRECT + 1] < 0)
+            cout << 111111113 << endl;
         synchDisk->ReadSector(dataSectors[NUMDIRECT + 1], (char *)secBuffer);
         for (int i = 0; i < (numSectors - NUMFIRST - 1) / 32 + 1; ++i)
         {
 
             int firBuffer[SECPERIND];
+            if (secBuffer[i] < 0)
+                cout << 111111114 << endl;
             synchDisk->ReadSector(secBuffer[i], (char *)firBuffer);
 
             //是否是最后一轮？
@@ -225,7 +231,10 @@ void FileHeader::Deallocate(BitMap *freeMap)
 void FileHeader::FetchFrom(int sector)
 {
     //在这里获取inodeSector
-    inodeSector = sector;
+    // inodeSector = sector;
+    if (sector < 0)
+        cout << 1111115 << endl;
+
     synchDisk->ReadSector(sector, (char *)this);
 }
 
@@ -254,19 +263,34 @@ int FileHeader::ByteToSector(int offset)
 {
     int secNum = offset / SectorSize;
     if (secNum < NUMDIRECT) //直接索引
+    {
+        if (dataSectors[secNum] < 0)
+            cout << 111111111116 << endl;
         return dataSectors[secNum];
+    }
     else if (secNum < NUMFIRST) //一级索引
     {
         int buffer[SECPERIND];
+        if (dataSectors[NUMDIRECT] < 0)
+            cout << 1111115 << endl;
         synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)buffer);
-        return buffer[secNum - NumDirect];
+
+        if (buffer[secNum - NUMDIRECT] < 0)
+            cout << 111111111116 << endl;
+        return buffer[secNum - NUMDIRECT];
     }
     else //二级索引
     {
         int secBuffer[SECPERIND], firBuffer[SECPERIND];
+        if (dataSectors[NUMDIRECT + 1] < 0)
+            cout << 1111111117 << endl;
         synchDisk->ReadSector(dataSectors[NUMDIRECT + 1], (char *)secBuffer);
         const int index = (secNum - NUMFIRST) / SECPERIND, offset = (secNum - NUMFIRST) % SECPERIND;
+        if (secBuffer[index] < 0)
+            cout << 111111111118 << endl;
         synchDisk->ReadSector(secBuffer[index], (char *)firBuffer);
+        if (firBuffer[offset] < 0)
+            cout << 1111111111119 << endl;
         return firBuffer[offset];
     }
 }
@@ -314,10 +338,10 @@ void FileHeader::Print()
     printf("Created: %s", GetCreateTime());
     printf("Modified: %s", GetLastModifiedTime());
     printf("Visited: %s", GetLastVisitedTime());
-    
 
     printf("FileHeader contents.  File size: %d.  File blocks:\n", numBytes);
     //lab4 exercise3
+    printf("now int inode :%d\n", inodeSector);
     int ii, iii;                        // For single / double indirect indexing
     int singleIndirectIndex[SECPERIND]; // used to restore the indexing map
     int doubleIndirectIndex[SECPERIND]; // used to restore the indexing map
@@ -392,4 +416,3 @@ char *FileHeader::TimeToString(time_t t)
     timeinfo = localtime(&t);
     return asctime(timeinfo);
 }
-

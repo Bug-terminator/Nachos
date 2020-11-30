@@ -72,7 +72,7 @@ public:
 
   //lab4 exercise2
   void SetLastVisitedTime(void) { time(&lastVisitedTime); }
-  char *GetLastVisitedTime(void) { return TimeToString(lastVisitedTime) ; }
+  char *GetLastVisitedTime(void) { return TimeToString(lastVisitedTime); }
   void SetLastModifiedTime(void) { time(&lastModifiedTime); }
   char *GetLastModifiedTime(void) { return TimeToString(lastModifiedTime); }
   void SetCreateTime(void) { time(&createTime); }
@@ -81,7 +81,12 @@ public:
   char *GetPath(void) { return path; }
   void SetFileType(FileType tp) { fileType = tp; }
   FileType GetFileType() { return fileType; }
-  int GetInodeSector() { return inodeSector; } //0 for '.', 1 for '..'
+  
+
+  // 在openfile.cc析构函数中writeBack()，以保存各种时间信息
+  void SetInodeSector(int sector) { inodeSector = sector; }
+  int GetInodeSector() { return inodeSector; }
+
 private:
   int numBytes;               // Number of bytes in the file
   int numSectors;             // Number of data sectors in the file
