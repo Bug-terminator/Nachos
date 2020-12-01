@@ -45,93 +45,84 @@
 bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 {
     //根据numBytes计算出di，fi，si的值
-    int di = 0, fi = 0, si = 0;
+    int di, fi, si;
+    int i, ii, iii, sector; // For direct / single indirect / double indirect indexing
 
     int extraBytes = fileSize, extraSectors = divRoundUp(fileSize, SectorSize);
     numBytes += extraBytes;
     numSectors += extraSectors;
-    if (numSectors <= NUMDIRECT) //直接索引
+    int singleIndirectIndex[SECPERIND]; // used to restore the indexing map
+    int doubleIndirectIndex[SECPERIND]; // used to restore the indexing map
+    printf("  Direct indexing:\n    ");
+    //断言剩下的块数是足够的
+    ASSERT(1);
+    //从direct开始，条件不满足则空操作
+    for (i = di; (i < numSectors) && (i < NUMDIRECT); i++)
+        dataSectors[i] = freeMap->Find();
+    if (numSectors > NUMDIRECT) //一级索引
     {
-        if (freeMap->NumClear() < extraSectors)
-            return FALSE; // not enough space
-        for (int i = di + 1; i < di + 1 + extraSectors; i++)
-            dataSectors[i] = freeMap->Find();
-    }
-    else if (numSectors <= NUMFIRST) //一级索引
-    {
 
-        if (di != NUMDIRECT) //一级索引尚未创建
+        //一级索引是否已经存在？
+        if (di >= NUMDIRECT) //是
         {
-            if (freeMap->NumClear() < extraSectors + 1) //+1 是因为一级索引
-                return FALSE;
-            //先分配直接索引
-            for (int i = di + 1; i < NUMDIRECT; i++)
-                dataSectors[i] = freeMap->Find();
-            //再分配一级索引
-            int sector = freeMap->Find(); //for primary index
-            int buffer[SECPERIND];
-            for (int i = 0; i < numSectors - NUMDIRECT; ++i)
-                buffer[i] = freeMap->Find();
-            dataSectors[NUMDIRECT] = sector;
-            synchDisk->WriteSector(sector, (char *)buffer);
-        }
-        else //已经有了一级索引
-        {
-            if (freeMap->NumClear() < extraSectors)
-                return FALSE;
-            int buffer[SECPERIND];
-            synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)buffer);
-            for (int i = fi + 1; i < fi + 1 + extraSectors; i++)
-                dataSectors[i] = freeMap->Find();
-            synchDisk->WriteSector(dataSectors[NUMDIRECT], (char *)buffer);
-        }
-    }
-    else //二级索引
-    {
-        //从直接索引跳到二级
-        //从一级索引跳到二级
-        //在二级索引内部扩展：1.二级的同一个一级，二级的不同一级
-
-
-
-
-
-
-
-        if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1) //(numSectors - NUMFIRST - 1)/32 + 1表示
-            return FALSE;                                                                      //二級索引中的一級索引，最后的+1为二级索引本身
-        for (int i = 0; i < NUMDIRECT; i++)
-        {
-            dataSectors[i] = freeMap->Find();
-        }
-
-        int sector = freeMap->Find(); //for primary index
-        int buffer[SECPERIND];
-        for (int i = 0; i < SECPERIND; ++i)
-        {
-            buffer[i] = freeMap->Find();
-        }
-        dataSectors[NUMDIRECT] = sector;
-        synchDisk->WriteSector(sector, (char *)buffer);
-
-        int sector2 = freeMap->Find(); //for secondary index
-        dataSectors[NUMDIRECT + 1] = sector2;
-        int secBuffer[SECPERIND];
-        for (int i = 0; i < (numSectors - NUMFIRST - 1) / 32 + 1; ++i)
-        {
-            sector = freeMap->Find();
-            secBuffer[i] = sector;
-            int firBuffer[SECPERIND];
-            //是否是最后一轮？
-            int limit_j = (i != (numSectors - NUMFIRST - 1) / 32) ? SECPERIND : (numSectors - NUMFIRST) % SECPERIND;
-            for (int j = 0; j < limit_j; ++j)
+            if (di == NUMDIRECT) //一级索引
             {
-                firBuffer[j] = freeMap->Find();
+                synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)singleIndirectIndex);
+                i = fi + NumDirect;
+                ii = fi;
             }
-
-            synchDisk->WriteSector(sector, (char *)firBuffer);
+            else //二级索引
+            {
+                i = NUMFIRST;
+                ii = SECPERIND;
+            }
         }
-        synchDisk->WriteSector(sector2, (char *)secBuffer);
+        else //一级索引不存在
+        {
+            i = NumDirect;
+            sector = freeMap->Find();
+            dataSectors[NUMDIRECT] = sector;
+        }
+        bool changed = FALSE;//防止多余I/O
+        //如果条件不满足，则空操作
+        for (; (i < numSectors) && (ii < SECPERIND); i++, ii++)
+        {
+            changed = TRUE;
+            singleIndirectIndex[ii] = freeMap->Find();
+        }
+        if (changed)
+            synchDisk->WriteSector(sector, (char *)singleIndirectIndex);
+
+        if (numSectors > NUMFIRST) //二级索引
+        {
+            ASSERT(2);
+            //二级索引是否已经存在？
+            if (di == NUMDIRECT + 1) //是
+            {
+                synchDisk->ReadSector(dataSectors[NUMDIRECT + 1], (char *)doubleIndirectIndex);
+                i = NUMFIRST + fi * SECPERIND + si;
+                ii = fi;
+                iii = si;
+            }
+            else
+            {
+                sector = freeMap->Find();
+                dataSectors[NUMDIRECT + 1] = sector;
+                i = NUMFIRST;
+                ii = 0;
+                iii = 0;
+            }
+            for (; (i < numSectors) && (ii < SECPERIND); ii++)
+            {
+                printf("\n    single indirect indexing: (mapping table sector: %d)\n      ", doubleIndirectIndex[ii]);
+                int sector1 = freeMap->Find();
+                doubleIndirectIndex[ii] = sector1;
+                for (; (i < numSectors) && (iii < SECPERIND); i++, iii++)
+                    singleIndirectIndex[iii] = freeMap->Find();
+                synchDisk->WriteSector(sector1, (char *)singleIndirectIndex);
+            }
+            synchDisk->WriteSector(sector, (char *)doubleIndirectIndex);
+        }
     }
 
     //lab4 exercise2
