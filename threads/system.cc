@@ -26,13 +26,13 @@ Timer *timer;                // the hardware timer device,
 
 //lab4
 bool verbose = FALSE;
-#ifdef FILESYS_NEEDED
+// #ifdef FILESYS_NEEDED
 FileSystem *fileSystem;
-#endif
+// #endif
 
-#ifdef FILESYS 
+// #ifdef FILESYS 
 SynchDisk *synchDisk;
-#endif
+// #endif
 
 #ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB
 Machine *machine;   // user program memory and registers
@@ -199,13 +199,13 @@ void Initialize(int argc, char **argv)
     machine = new Machine(debugUserProg); // this must come first
 #endif
 
-#ifdef FILESYS
+// #ifdef FILESYS //暂时注释
     synchDisk = new SynchDisk("DISK");
-#endif
+// #endif
 
-#ifdef FILESYS_NEEDED
+// #ifdef FILESYS_NEEDED //暂时注释
     fileSystem = new FileSystem(format);
-#endif
+// #endif
 
 #ifdef NETWORK
     postOffice = new PostOffice(netname, rely, 10);

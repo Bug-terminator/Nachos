@@ -108,6 +108,8 @@ FileSystem::FileSystem(bool format)
         //lab4 exercise2
         mapHdr->SetFileType(NORM);
         dirHdr->SetFileType(DIR);
+        mapHdr->SetInodeSector(FreeMapSector);
+        dirHdr->SetInodeSector(DirectorySector);
         
         DEBUG('f', "Writing headers back to disk.\n");
         mapHdr->WriteBack(FreeMapSector);

@@ -86,7 +86,11 @@ public:
   // 在openfile.cc析构函数中writeBack()，以保存各种时间信息
   void SetInodeSector(int sector) { inodeSector = sector; }
   int GetInodeSector() { return inodeSector; }
-
+  //lab4 exercise5
+  bool expandFile(BitMap *bitMap,int extraCharNum)
+  {
+    Allocate(bitMap, extraCharNum);
+  }
 private:
   int numBytes;               // Number of bytes in the file
   int numSectors;             // Number of data sectors in the file

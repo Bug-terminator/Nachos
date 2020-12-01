@@ -44,31 +44,60 @@
 //----------------------------------------------------------------------
 bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 {
-    numBytes = fileSize;
-    numSectors = divRoundUp(fileSize, SectorSize);
+    //根据numBytes计算出di，fi，si的值
+    int di = 0, fi = 0, si = 0;
+
+    int extraBytes = fileSize, extraSectors = divRoundUp(fileSize, SectorSize);
+    numBytes += extraBytes;
+    numSectors += extraSectors;
     if (numSectors <= NUMDIRECT) //直接索引
     {
-        if (freeMap->NumClear() < numSectors)
+        if (freeMap->NumClear() < extraSectors)
             return FALSE; // not enough space
-
-        for (int i = 0; i < numSectors; i++)
+        for (int i = di + 1; i < di + 1 + extraSectors; i++)
             dataSectors[i] = freeMap->Find();
     }
     else if (numSectors <= NUMFIRST) //一级索引
     {
-        if (freeMap->NumClear() < numSectors + 1) //+1 是因为一级索引
-            return FALSE;
-        for (int i = 0; i < NUMDIRECT; i++)
-            dataSectors[i] = freeMap->Find();
-        int sector = freeMap->Find(); //for primary index
-        int buffer[SECPERIND];
-        for (int i = 0; i < numSectors - NUMDIRECT; ++i)
-            buffer[i] = freeMap->Find();
-        dataSectors[NUMDIRECT] = sector;
-        synchDisk->WriteSector(sector, (char *)buffer);
+
+        if (di != NUMDIRECT) //一级索引尚未创建
+        {
+            if (freeMap->NumClear() < extraSectors + 1) //+1 是因为一级索引
+                return FALSE;
+            //先分配直接索引
+            for (int i = di + 1; i < NUMDIRECT; i++)
+                dataSectors[i] = freeMap->Find();
+            //再分配一级索引
+            int sector = freeMap->Find(); //for primary index
+            int buffer[SECPERIND];
+            for (int i = 0; i < numSectors - NUMDIRECT; ++i)
+                buffer[i] = freeMap->Find();
+            dataSectors[NUMDIRECT] = sector;
+            synchDisk->WriteSector(sector, (char *)buffer);
+        }
+        else //已经有了一级索引
+        {
+            if (freeMap->NumClear() < extraSectors)
+                return FALSE;
+            int buffer[SECPERIND];
+            synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)buffer);
+            for (int i = fi + 1; i < fi + 1 + extraSectors; i++)
+                dataSectors[i] = freeMap->Find();
+            synchDisk->WriteSector(dataSectors[NUMDIRECT], (char *)buffer);
+        }
     }
     else //二级索引
     {
+        //从直接索引跳到二级
+        //从一级索引跳到二级
+        //在二级索引内部扩展：1.二级的同一个一级，二级的不同一级
+
+
+
+
+
+
+
         if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1) //(numSectors - NUMFIRST - 1)/32 + 1表示
             return FALSE;                                                                      //二級索引中的一級索引，最后的+1为二级索引本身
         for (int i = 0; i < NUMDIRECT; i++)
@@ -111,6 +140,75 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
     SetLastVisitedTime();
     return TRUE;
 }
+// bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
+// {
+//     numBytes = fileSize;
+//     numSectors = divRoundUp(fileSize, SectorSize);
+//     if (numSectors <= NUMDIRECT) //直接索引
+//     {
+//         if (freeMap->NumClear() < numSectors)
+//             return FALSE; // not enough space
+
+//         for (int i = 0; i < numSectors; i++)
+//             dataSectors[i] = freeMap->Find();
+//     }
+//     else if (numSectors <= NUMFIRST) //一级索引
+//     {
+//         if (freeMap->NumClear() < numSectors + 1) //+1 是因为一级索引
+//             return FALSE;
+//         for (int i = 0; i < NUMDIRECT; i++)
+//             dataSectors[i] = freeMap->Find();
+//         int sector = freeMap->Find(); //for primary index
+//         int buffer[SECPERIND];
+//         for (int i = 0; i < numSectors - NUMDIRECT; ++i)
+//             buffer[i] = freeMap->Find();
+//         dataSectors[NUMDIRECT] = sector;
+//         synchDisk->WriteSector(sector, (char *)buffer);
+//     }
+//     else //二级索引
+//     {
+//         if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1) //(numSectors - NUMFIRST - 1)/32 + 1表示
+//             return FALSE;                                                                      //二級索引中的一級索引，最后的+1为二级索引本身
+//         for (int i = 0; i < NUMDIRECT; i++)
+//         {
+//             dataSectors[i] = freeMap->Find();
+//         }
+
+//         int sector = freeMap->Find(); //for primary index
+//         int buffer[SECPERIND];
+//         for (int i = 0; i < SECPERIND; ++i)
+//         {
+//             buffer[i] = freeMap->Find();
+//         }
+//         dataSectors[NUMDIRECT] = sector;
+//         synchDisk->WriteSector(sector, (char *)buffer);
+
+//         int sector2 = freeMap->Find(); //for secondary index
+//         dataSectors[NUMDIRECT + 1] = sector2;
+//         int secBuffer[SECPERIND];
+//         for (int i = 0; i < (numSectors - NUMFIRST - 1) / 32 + 1; ++i)
+//         {
+//             sector = freeMap->Find();
+//             secBuffer[i] = sector;
+//             int firBuffer[SECPERIND];
+//             //是否是最后一轮？
+//             int limit_j = (i != (numSectors - NUMFIRST - 1) / 32) ? SECPERIND : (numSectors - NUMFIRST) % SECPERIND;
+//             for (int j = 0; j < limit_j; ++j)
+//             {
+//                 firBuffer[j] = freeMap->Find();
+//             }
+
+//             synchDisk->WriteSector(sector, (char *)firBuffer);
+//         }
+//         synchDisk->WriteSector(sector2, (char *)secBuffer);
+//     }
+
+//     //lab4 exercise2
+//     SetCreateTime();
+//     SetLastModifiedTime();
+//     SetLastVisitedTime();
+//     return TRUE;
+// }
 
 //原始版本
 // bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
@@ -341,7 +439,7 @@ void FileHeader::Print()
 
     printf("FileHeader contents.  File size: %d.  File blocks:\n", numBytes);
     //lab4 exercise3
-    printf("now int inode :%d\n", inodeSector);
+    // printf("now in inode :%d\n", inodeSector);
     int ii, iii;                        // For single / double indirect indexing
     int singleIndirectIndex[SECPERIND]; // used to restore the indexing map
     int doubleIndirectIndex[SECPERIND]; // used to restore the indexing map

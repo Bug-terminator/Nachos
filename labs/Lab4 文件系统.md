@@ -434,9 +434,9 @@ Nachos的磁盘大小块数为32\*32 = 1024块（`code/machine/disk.h`)，直接
 新增宏定义如下：
 
 ```cpp
-#define SECPERIND 32                   //每一个间接索引可以表示的物理块数
-#define NUMDIRECT 22                   //直接索引表示的最大块数
-#define NUMFIRST NUMDIRECT + SECPERIND //一级索引表达的最大块数
+#define SECPERIND 32                     //每一个间接索引可以表示的物理块数
+#define NUMDIRECT 22                     //直接索引表示的最大块数
+#define NUMFIRST (NUMDIRECT + SECPERIND) //一级索引表达的最大块数
 ```
 
 ```cpp
@@ -470,9 +470,7 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
         if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1)                                                                       //(numSectors - NUMFIRST - 1)/32 + 1表示
             return FALSE;                                 //二級索引中的一級索引，最后的+1为二级索引本身
         for (int i = 0; i < NUMDIRECT; i++)
-        {
             dataSectors[i] = freeMap->Find();
-        }
 
         int sector = freeMap->Find(); //for primary index
         int buffer[SECPERIND];
@@ -538,7 +536,6 @@ int FileHeader::ByteToSector(int offset)
         return firBuffer[offset];
     }
 }
-//原始版本
 ```
 
 关于其他代码的改动(deallocate(), print(), etc.)，请查看`code/filesys/filehdr.cc`;
@@ -547,7 +544,7 @@ int FileHeader::ByteToSector(int offset)
 
 > 这里我引用了github一位学长的测试脚本，位于`code\filesys\test\exercise3_large_file_test.sh`中，该脚本文件的作用为
 >
-> 产生一个大文件，复制进nachos，然后删除该文件。我们可以通过修改filehdr::print()来查看我们程序的正确性。
+> 产生一个大文件，复制进nachos，然后删除该文件。我们可以通过该脚本测试我们程序的正确性。
 >
 > [Source--github](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
 
@@ -562,7 +559,7 @@ Generate the large file for double indirect indexing
 === format the DISK ===
 === copies file "largeFile" from UNIX to Nachos ===
 sectorNumber = -1219460751       //这里出错，在困难&解决中将详细阐述
-																 //虽然出错了但是运行结果正确，很迷
+																 //虽然出错了但是运行结果正确，很迷--
 Assertion failed: line 123, file "../machine/disk.cc"
 Aborted
 === prints the contents of the entire file system ===
@@ -1089,7 +1086,22 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 
 > 对文件的创建操作和写入操作进行适当修改，以使其符合实习要求。 
 
- 
+ 目前Nachos文件是在一开始就分配好长度的，一旦分配，不可改变。这就导致了一些问题，比如在调用openfile::writeAt()的时候，如果写入的内容超出文件范围，那么就会报错；而如果我给某个文件分配了很多空间，而实际只用了一小部分，就会导致大量的空间浪费。因为实际中我们不可能每次都知道文件究竟会有多大，所以实现文件长度的动态调整是非常有必要的。
+
+经过前面的分析，openfile::writeAt()会导致文件长度发生变化。在写入时，我们要先判断
+
+```cpp
+if(beginPos + numChar > fileSize) 
+	hdr->expandFile(extraSpace)
+```
+
+在filehdr.cc中新增成员函数`expandFile`，该函数先判断当前的块是否为满块，如果不满，需要将extraSpace减去剩余的到达满块的字符数。然后调用exercise3中实现的Allocate()来分配需要的空间。
+
+> 这里为了保持接口不变，需要对Allocate()进行修改：在分配之前先判断索引的值是否为0？如果是，表示尚未分配，需要向位图申请空间。如果否，表示已分配，不做任何操作。这个方法的缺点是扩展长度都会从头开始遍历整个索引表，如果文件长度扩展很多次，那么时间开销会很大。思考：我们如何在保证程序执行效率的前提下，用最少的改动来达到目的？
+>
+> 改进：
+>
+> 在allocate开头根据fileSize计算出di,fi,si的值，它们分别表示直接/一级/二级索引的最后一项，每次分配都从该处开始即可。
 
 ## **二、文件访问的同步与互斥**
 
@@ -1131,7 +1143,7 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 
 >不能将strncpy函数改为strcpy函数，因为char*指针指向的内存可能不足以储存src字符串，导致segmentation fault。
 >
->不过最终我还是采用了char[]来存储文件名，原因在之前exercise2中的反思有说过。
+>不过最终我还是采用了char[]来存储文件名，原因在之前exercise2中的**反思**有说过。
 
 ## 160 - 54 = 170?
 
