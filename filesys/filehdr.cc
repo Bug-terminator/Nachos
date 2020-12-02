@@ -460,7 +460,7 @@ bool FileHeader::expandFile(BitMap *freeMap, int extraCharNum)
             return FALSE;
 
     //single indexing
-    if (numSectors > NUMDIRECT)
+    if (numSectors > NUMDIRECT && i < NUMSINGLE)
     {
         int buffer[SECPERIND] = {0};
         if (dataSectors[SINGLEINDEX])
