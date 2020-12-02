@@ -27,7 +27,9 @@
 //lab4 exercise3
 #define SECPERIND 32                     //每一个间接索引可以表示的物理块数，sectors per indirect
 #define NUMDIRECT 22                     //直接索引表示的最大块数
-#define NUMFIRST (NUMDIRECT + SECPERIND) //一级索引表达的最大块数
+#define NUMSINGLE (NUMDIRECT + SECPERIND) //一级索引表达的最大块数
+#define SINGLEINDEX NUMDIRECT            //一级索引下标
+#define DOUBLEINDEX (SINGLEINDEX + 1)    //二级索引下标
 typedef enum
 {
   NORM,
@@ -81,16 +83,13 @@ public:
   char *GetPath(void) { return path; }
   void SetFileType(FileType tp) { fileType = tp; }
   FileType GetFileType() { return fileType; }
-  
 
   // 在openfile.cc析构函数中writeBack()，以保存各种时间信息
   void SetInodeSector(int sector) { inodeSector = sector; }
   int GetInodeSector() { return inodeSector; }
   //lab4 exercise5
-  bool expandFile(BitMap *bitMap,int extraCharNum)
-  {
-    Allocate(bitMap, extraCharNum);
-  }
+  bool expandFile(BitMap *freeMap, int extraCharNum);
+
 private:
   int numBytes;               // Number of bytes in the file
   int numSectors;             // Number of data sectors in the file
@@ -105,6 +104,12 @@ private:
   FileType fileType;
   int inodeSector; //openfile析构时需要保存信息
   char *TimeToString(time_t t);
+
+  // lab4 exercise5
+  // int stPtr[3];//start ptr,分别指向直接/一级/二级索引开始的位置，用于文件大小的扩展
+
+  //lab4 exercise5
+  // int i, ii, iii;//for direct/ single / double indexing
 };
 
 #endif // FILEHDR_H
