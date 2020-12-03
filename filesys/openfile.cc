@@ -33,6 +33,8 @@ OpenFile::OpenFile(int sector)
     hdr->FetchFrom(sector);
     hdr->SetInodeSector(sector);
     seekPosition = 0;
+    //lab4 exercise7
+    synchDisk->thraedsPerFile[sector]++;
 }
 
 //----------------------------------------------------------------------
@@ -44,6 +46,8 @@ OpenFile::~OpenFile()
 {
     //lab4 exercise2
     hdr->WriteBack(hdr->GetInodeSector());
+    //lab4 exercise7
+    synchDisk->thraedsPerFile[hdr->GetInodeSector()]--;
     delete hdr;
 }
 
@@ -115,6 +119,7 @@ int OpenFile::Write(char *into, int numBytes)
 
 int OpenFile::ReadAt(char *into, int numBytes, int position)
 {
+    synchDisk->rwLock[hdr->GetInodeSector()]->ReaderAcquire();
     int fileLength = hdr->FileLength();
     int i, firstSector, lastSector, numSectors;
     char *buf;
@@ -123,8 +128,8 @@ int OpenFile::ReadAt(char *into, int numBytes, int position)
         return 0; // check request
     if ((position + numBytes) > fileLength)
         numBytes = fileLength - position;
-    // DEBUG('f', "Reading %d bytes at %d, from file of length %d.\n",//暫時注釋    
-        //   numBytes, position, fileLength);
+    // DEBUG('f', "Reading %d bytes at %d, from file of length %d.\n",//暫時注釋
+    //   numBytes, position, fileLength);
 
     firstSector = divRoundDown(position, SectorSize);
     lastSector = divRoundDown(position + numBytes - 1, SectorSize);
@@ -142,17 +147,20 @@ int OpenFile::ReadAt(char *into, int numBytes, int position)
 
     //lab4 exercise2
     hdr->SetLastVisitedTime();
+    synchDisk->rwLock[hdr->GetInodeSector()]->ReaderRelease();
     return numBytes;
 }
 
 int OpenFile::WriteAt(char *from, int numBytes, int position)
 {
+    synchDisk->rwLock[hdr->GetInodeSector()]->WriterAcquire();
+
     int fileLength = hdr->FileLength();
-    
+
     // printf("in openfile writeat, get numSetors:%d.\n",fileSectors);
     // DEBUG('f',"fileLength :%d\n",fileLength);
     // lab4 exercise5
-    if (numBytes + position > fileLength )
+    if (numBytes + position > fileLength)
     {
         // cout << "condition matched.expanding fileSize."<<endl;
         BitMap *freeMap = new BitMap(NumSectors);
@@ -181,7 +189,7 @@ int OpenFile::WriteAt(char *from, int numBytes, int position)
     if ((position + numBytes) > fileLength)
         numBytes = fileLength - position;
     // DEBUG('f', "Writing %d bytes at %d, from file of length %d.\n",//暫時注釋
-        //   numBytes, position, fileLength);
+    //   numBytes, position, fileLength);
 
     firstSector = divRoundDown(position, SectorSize);
     lastSector = divRoundDown(position + numBytes - 1, SectorSize);
@@ -211,7 +219,7 @@ int OpenFile::WriteAt(char *from, int numBytes, int position)
     //lab4 exercise2
     hdr->SetLastModifiedTime();
     hdr->SetLastVisitedTime();
-    // cout << numBytes<<" " << 111111 << endl;
+    synchDisk->rwLock[hdr->GetInodeSector()]->WriterRelease();
     return numBytes;
 }
 

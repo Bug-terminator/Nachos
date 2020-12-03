@@ -282,6 +282,8 @@ bool FileSystem::Remove(char *name)
         delete directory;
         return FALSE; // file not found
     }
+    if(synchDisk->thraedsPerFile[sector])
+    return FALSE;
     fileHdr = new FileHeader;
     fileHdr->FetchFrom(sector);
 

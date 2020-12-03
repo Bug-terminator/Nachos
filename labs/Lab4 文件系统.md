@@ -1414,10 +1414,76 @@ wodemuqMachine halting!
 >
 > ![image-20201203221158713](Lab4 文件系统.assets/image-20201203221158713.png)
 
-我们可以借鉴Linux对于文件的管理方式--文件描述符，来实现对文件读写的管理：
+1. 按照已经实现的机制，不同的线程通过不同的 OpenFile 结构独自打开文件， 独自拥有当前文件访问位置 seekPosition，彼此不会互相干扰
 
-1. 系统维护一个数组FileDescriptor[MAXOPENFILENUM]，每一项对应openFile的inode；
-2. 每次有线程申请打开文件（syscall）时，系统都会check这个数组：如果文件已经打开，返回它的描述符；否则重新分配一个文件描述符
+2. 按照已经实现的机制，虽然对磁盘的访问是互斥的，但是由于线程之间读写顺序的不确定性，在多线程环境下结果仍具有不可预测性。我们可以按照解决读者写者问题的思路来解决这个问题：通过inode识别特定的文件，对于每个文件，特定时刻只允许 1 个写者或者多个读者。具体实现时，1 个文件对应 1 个RWLock（code/thread/synch.cc,lab3 challenge2），在synchDisk.h中添加代码如下：
+
+```cpp
+class SynchDisk
+{
+public:    
+RWLock* rwLock[NumSectors];
+...
+}
+
+SynchDisk::SynchDisk(char *name)
+{
+    for (int i = 0; i < NumSectors; ++i)
+        rwLock[i] = new RWLock("synRWLock");//初始化
+}
+```
+
+并对openfile中的读写进行加锁,因为write和read会调用writeAt和readAt，所以只需要对后两者加锁即可：
+
+```cpp
+int OpenFile::ReadAt(char *into, int numBytes, int position)
+{
+    synchDisk->rwLock[hdr->GetInodeSector()]->ReaderAcquire();
+		...
+    synchDisk->rwLock[hdr->GetInodeSector()]->ReaderRelease();
+    return numBytes;
+}
+
+int OpenFile::WriteAt(char *from, int numBytes, int position)
+{
+    synchDisk->rwLock[hdr->GetInodeSector()]->WriterAcquire();
+		...
+    synchDisk->rwLock[hdr->GetInodeSector()]->WriterRelease();
+    return numBytes;
+}
+```
+
+3. 增加对特定文件线程数的统计，在`filesys/synchDisk.h`中：
+
+```cpp
+int thraedsPerFile[NumSectors];
+```
+
+并修改openFile的构造/析构函数：
+
+```cpp
+OpenFile::OpenFile(int sector)
+{
+    ...
+    //lab4 exercise7
+    synchDisk->thraedsPerFile[sector]++;
+}
+OpenFile::~OpenFile()
+{
+    ...
+    //lab4 exercise7
+    synchDisk->thraedsPerFile[hdr->GetInodeSector()]--;
+}
+```
+
+最后修改code/filesys/filesys.cc中的remove，当某个文件中还有其他线程时，则无法删除：
+
+```cpp
+if(synchDisk->thraedsPerFile[sector])
+    return FALSE;
+```
+
+#### 测试
 
 ## 三、Challenges （至少选做1个）
 
