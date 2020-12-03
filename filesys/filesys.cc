@@ -104,13 +104,12 @@ FileSystem::FileSystem(bool format)
         // reads the file header off of disk (and currently the disk has garbage
         // on it!).
 
-
         //lab4 exercise2
         mapHdr->SetFileType(NORM);
         dirHdr->SetFileType(DIR);
         mapHdr->SetInodeSector(FreeMapSector);
         dirHdr->SetInodeSector(DirectorySector);
-        
+
         DEBUG('f', "Writing headers back to disk.\n");
         mapHdr->WriteBack(FreeMapSector);
         dirHdr->WriteBack(DirectorySector);
@@ -121,7 +120,8 @@ FileSystem::FileSystem(bool format)
 
         freeMapFile = new OpenFile(FreeMapSector);
         directoryFile = new OpenFile(DirectorySector);
-
+        //lab4 exercise4
+        currentDirectory->FetchFrom(directoryFile);
         // Once we have the files "open", we can write the initial version
         // of each file back to disk.  The directory at this point is completely
         // empty; but the bitmap has been changed to reflect the fact that
@@ -222,7 +222,7 @@ bool FileSystem::Create(char *name, int initialSize)
                 //     hdr->SetFileType(NORM);
                 // else
                 //     hdr->SetFileType(DIR);
-               
+
                 success = TRUE;
                 // everthing worked, flush all changes back to disk
                 hdr->WriteBack(sector);
@@ -359,4 +359,20 @@ void FileSystem::Print()
     delete dirHdr;
     delete freeMap;
     delete directory;
+}
+
+//----------------------------------------------------------------------
+// FileSystem::Mkdir
+// 在当前目录下创建指定名称的子目录
+//----------------------------------------------------------------------
+bool FileSystem::Mkdir(char *dirname)
+{
+    Create(dirname, DirectoryFileSize);
+    OpenFile *dirFile = Open(dirname);
+    Directory *dir;
+    dir->FetchFrom(dirFile);
+    dir->Add("./", currentDirectory->Find(dirname));
+    dir->Add("../", currentDirectory->Find("./"));
+    dir->WriteBack(dirFile);
+    return TRUE;
 }

@@ -107,9 +107,6 @@ private:
 
   // lab4 exercise5
   // int stPtr[3];//start ptr,分别指向直接/一级/二级索引开始的位置，用于文件大小的扩展
-
-  //lab4 exercise5
-  // int i, ii, iii;//for direct/ single / double indexing
 };
 
 #endif // FILEHDR_H

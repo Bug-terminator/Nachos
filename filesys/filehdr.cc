@@ -445,7 +445,8 @@ char *FileHeader::TimeToString(time_t t)
 }
 
 //----------------------------------------------------------------------
-// FileHeader::扩展文件大小
+// FileHeader::expandFile
+// 扩展文件大小
 //----------------------------------------------------------------------
 bool FileHeader::expandFile(BitMap *freeMap, int extraCharNum)
 {
