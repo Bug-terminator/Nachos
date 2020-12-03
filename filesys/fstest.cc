@@ -20,6 +20,7 @@
 #include "thread.h"
 #include "disk.h"
 #include "stats.h"
+#include "filehdr.h"
 
 #define TransferSize 10 // make it small, just to be difficult
 
@@ -132,6 +133,8 @@ FileWrite()
         printf("Perf test: unable to open %s\n", FileName);
         return;
     }
+
+
     for (i = 0; i < FileSize; i += ContentSize)
     {
         numBytes = openFile->Write(Contents, ContentSize);

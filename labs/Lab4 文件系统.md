@@ -177,7 +177,7 @@ class FileHeader
 { //i-node
 public:
   bool Allocate(BitMap *bitMap, int fileSize); // 通过文件大小初始化i-node（新）
-  void Deallocate(BitMap *bitMap);             // 将一个文件所占用的数据空间释放（没有释放i-node的空间）
+  void DeAllocate(BitMap *bitMap);             // 将一个文件所占用的数据空间释放（没有释放i-node的空间）
   void FetchFrom(int sectorNumber);            // 从磁盘中取出i-node（旧）
   void WriteBack(int sectorNumber);            // 将i-node写入磁盘
   int ByteToSector(int offset);                // 实现文件逻辑地址到物理地址的转换
@@ -423,7 +423,7 @@ KSt10moneypunctIcLb1EE13negative_signEvFileHeader
 
 > 改直接索引为间接索引，以突破文件长度不能超过4KB的限制。
 
-#### Allocate()/Deallocate()
+#### Allocate()/DeAllocate()
 
 每次调用File system::Create()函数，都会调用FileHeader::Allocate()来分配物理空间。
 
@@ -444,61 +444,44 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 {
     numBytes = fileSize;
     numSectors = divRoundUp(fileSize, SectorSize);
-    if (numSectors <= NUMDIRECT) //直接索引
-    {
-        if (freeMap->NumClear() < numSectors)
-            return FALSE; // not enough space
-
-        for (int i = 0; i < numSectors; i++)
-            dataSectors[i] = freeMap->Find();
-    }
-    else if (numSectors <= NUMFIRST) //一级索引
-    {
-        if (freeMap->NumClear() < numSectors + 1) //+1 是因为一级索引
+    ASSERT(freeMap->NumClear() >= numSectors);
+    int i = 0, ii = 0, iii = 0; //direct/single/double indxing
+    
+  	//direct indexing
+    for (; i < numSectors && i < NUMDIRECT; i++)
+        if ((dataSectors[i] = freeMap->Find()) == -1)
             return FALSE;
-        for (int i = 0; i < NUMDIRECT; i++)
-            dataSectors[i] = freeMap->Find();
-        int sector = freeMap->Find(); //for primary index
-        int buffer[SECPERIND];
-        for (int i = 0; i < numSectors - NUMDIRECT; ++i)
-            buffer[i] = freeMap->Find();
-        dataSectors[NUMDIRECT] = sector;
-        synchDisk->WriteSector(sector, (char *)buffer);
-    }
-    else //二级索引
+
+    //single indexing
+    if (numSectors > NUMDIRECT)
     {
-        if (freeMap->NumClear() < numSectors + 1 + ((numSectors - NUMFIRST - 1) / 32 + 1) + 1)                                                                       //(numSectors - NUMFIRST - 1)/32 + 1表示
-            return FALSE;                                 //二級索引中的一級索引，最后的+1为二级索引本身
-        for (int i = 0; i < NUMDIRECT; i++)
-            dataSectors[i] = freeMap->Find();
+        int buffer[SECPERIND] = {0};
+        if ((dataSectors[SINGLEINDEX] = freeMap->Find()) == -1)
+            return FALSE;
+        for (; i < numSectors && i < NUMSINGLE; i++)
+            if ((buffer[i - NUMDIRECT] = freeMap->Find()) == -1)
+                return FALSE;
+        synchDisk->WriteSector(dataSectors[SINGLEINDEX], (char *)buffer);
+    }
 
-        int sector = freeMap->Find(); //for primary index
-        int buffer[SECPERIND];
-        for (int i = 0; i < SECPERIND; ++i)
+    //double indexing
+    if (numSectors > NUMSINGLE)
+    {
+        int doubleBuffer[SECPERIND] = {0};
+        if ((dataSectors[DOUBLEINDEX] = freeMap->Find()) == -1)
+            return FALSE;
+        for (; i < numSectors && ii < SECPERIND; ++ii)
         {
-            buffer[i] = freeMap->Find();
+            int singleBuffer[SECPERIND] = {0};
+            if ((doubleBuffer[ii] = freeMap->Find()) == -1)
+                return FALSE;
+            for (; i < numSectors && iii < SECPERIND; i++, iii++)
+                if ((singleBuffer[iii] = freeMap->Find()) == -1)
+                    return FALSE;
+            iii %= SECPERIND;
+            synchDisk->WriteSector(doubleBuffer[ii], (char *)singleBuffer);
         }
-        dataSectors[NUMDIRECT] = sector;
-        synchDisk->WriteSector(sector, (char *)buffer);
-
-        int sector2 = freeMap->Find(); //for secondary index
-        dataSectors[NUMDIRECT + 1] = sector2;
-        int secBuffer[SECPERIND];
-        for (int i = 0; i < (numSectors - NUMFIRST - 1) / 32 + 1; ++i)
-        {
-            sector = freeMap->Find();
-            secBuffer[i] = sector;
-            int firBuffer[SECPERIND];
-            //是否是最后一轮？
-            int limit_j = (i != (numSectors - NUMFIRST - 1) / 32) ? SECPERIND : (numSectors - NUMFIRST) % SECPERIND;
-            for (int j = 0; j < limit_j; ++j)
-            {
-                firBuffer[j] = freeMap->Find();
-            }
-
-            synchDisk->WriteSector(sector, (char *)firBuffer);
-        }
-        synchDisk->WriteSector(sector2, (char *)secBuffer);
+        synchDisk->WriteSector(dataSectors[DOUBLEINDEX], (char *)doubleBuffer);
     }
 
     //lab4 exercise2
@@ -509,7 +492,7 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 }
 ```
 
-而deallocate为allocate的逆向操作，这里不再赘述。
+而deAllocate为Allocate的逆向操作，这里不再赘述。
 
 #### ByteToSector()
 
@@ -538,7 +521,7 @@ int FileHeader::ByteToSector(int offset)
 }
 ```
 
-关于其他代码的改动(deallocate(), print(), etc.)，请查看`code/filesys/filehdr.cc`;
+关于其他代码的改动(deAllocate(), print(), etc.)，请查看`code/filesys/filehdr.cc`;
 
 #### 测试
 
@@ -555,27 +538,23 @@ vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ test/exercise3_large_
 Generate the large file for double indirect indexing
 123+0 records in
 123+0 records out
-125952 bytes (126 kB) copied, 0.0378735 s, 3.3 MB/s
+125952 bytes (126 kB) copied, 0.0532051 s, 2.4 MB/s
 === format the DISK ===
 === copies file "largeFile" from UNIX to Nachos ===
-sectorNumber = -1219460751       //这里出错，在困难&解决中将详细阐述
-																 //虽然出错了但是运行结果正确，很迷--
-Assertion failed: line 123, file "../machine/disk.cc"
-Aborted
 === prints the contents of the entire file system ===
 Bit map file header:
 File type: NORM
-Created: Sun Nov 29 07:36:56 2020
-Modified: Sun Nov 29 07:36:56 2020
-Visited: Sun Nov 29 07:36:56 2020
+Created: Thu Dec  3 01:39:34 2020
+Modified: Thu Dec  3 01:39:34 2020
+Visited: Thu Dec  3 01:39:34 2020
 FileHeader contents.  File size: 128.  File blocks:
   Direct indexing:
     2
 Directory file header:
 File type: DIR
-Created: Sun Nov 29 07:36:56 2020
-Modified: Sun Nov 29 07:36:56 2020
-Visited: Sun Nov 29 07:36:56 2020
+Created: Thu Dec  3 01:39:34 2020
+Modified: Thu Dec  3 01:39:34 2020
+Visited: Thu Dec  3 01:39:34 2020
 FileHeader contents.  File size: 320.  File blocks:
   Direct indexing:
     3 4 5
@@ -584,9 +563,9 @@ Bitmap set:
 Directory contents:
 Name: largeFile, Sector: 6
 File type: NORM
-Created: Sun Nov 29 07:36:56 2020
-Modified: Sun Nov 29 07:36:56 2020
-Visited: Sun Nov 29 07:36:56 2020
+Created: Thu Dec  3 01:39:34 2020
+Modified: Thu Dec  3 01:39:44 2020
+Visited: Thu Dec  3 01:39:44 2020
 FileHeader contents.  File size: 125952.  File blocks:
   Direct indexing:
     7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28
@@ -658,17 +637,17 @@ FileHeader contents.  File size: 125952.  File blocks:
 === prints the contents of the entire file system again ===
 Bit map file header:
 File type: NORM
-Created: Sun Nov 29 07:36:56 2020
-Modified: Sun Nov 29 07:36:56 2020
-Visited: Sun Nov 29 07:36:56 2020
+Created: Thu Dec  3 01:39:34 2020
+Modified: Thu Dec  3 01:39:34 2020
+Visited: Thu Dec  3 01:39:34 2020
 FileHeader contents.  File size: 128.  File blocks:
   Direct indexing:
     2
 Directory file header:
 File type: DIR
-Created: Sun Nov 29 07:36:56 2020
-Modified: Sun Nov 29 07:36:56 2020
-Visited: Sun Nov 29 07:36:56 2020
+Created: Thu Dec  3 01:39:34 2020
+Modified: Thu Dec  3 01:39:34 2020
+Visited: Thu Dec  3 01:39:34 2020
 FileHeader contents.  File size: 320.  File blocks:
   Direct indexing:
     3 4 5
@@ -679,7 +658,9 @@ Directory contents:
 
 #### 结论
 
-成功实现二级间接索引，并且能够表示Nachos物理磁盘的最大容量。
+结果显示，系统为123K的大文件分配了1022块磁盘，证明Allocate()实现正确。在删除大文件之后，bitmap恢复到之前的状态，证明deAllocate实现正确。
+
+结论：成功实现二级间接索引，并且能够表示Nachos物理磁盘的最大容量。
 
 ### Exercise 4 实现多级目录
 
@@ -1040,7 +1021,7 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
         {
             fileHdr = new FileHeader;
             fileHdr->FetchFrom(sector);
-            fileHdr->Deallocate(freeMap); // remove data blocks
+            fileHdr->DeAllocate(freeMap); // remove data blocks
             freeMap->Clear(sector);       // remove header block
             directory->Remove(name);
             freeMap->WriteBack(freeMapFile); // flush to disk
@@ -1076,7 +1057,7 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 
 #### 测试
 
-
+在实现shell之后进行。
 
 #### 改进
 
@@ -1088,20 +1069,185 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 
  目前Nachos文件是在一开始就分配好长度的，一旦分配，不可改变。这就导致了一些问题，比如在调用openfile::writeAt()的时候，如果写入的内容超出文件范围，那么就会报错；而如果我给某个文件分配了很多空间，而实际只用了一小部分，就会导致大量的空间浪费。因为实际中我们不可能每次都知道文件究竟会有多大，所以实现文件长度的动态调整是非常有必要的。
 
-经过前面的分析，openfile::writeAt()会导致文件长度发生变化。在写入时，我们要先判断
+在filehdr.cc中新增成员函数`expandFile`，该函数在原理上与exercise3中的Allocate非常相似，它们的区别就在于：
+
+1. Allocate每次从0开始，而expandFile从numSectors(接着上一次的结尾开始）。
+2. Allocate每次都需要创建新的singleBuffer和doubleBuffer（一/二级索引表），而expandFile可能会对已有的singleBuffer/doubleBuffer进行操作。
+3. 准确地说，Allocate是expandFile的一种特殊情况。
 
 ```cpp
-if(beginPos + numChar > fileSize) 
-	hdr->expandFile(extraSpace)
+//----------------------------------------------------------------------
+// FileHeader::expandFile
+// 扩展文件大小
+//----------------------------------------------------------------------
+bool FileHeader::expandFile(BitMap *freeMap, int extraCharNum)
+{
+    //计算额外字节数，额外磁盘数
+    int extraBytes = extraCharNum - (numSectors * SectorSize - numBytes), 
+        extraSectors = divRoundUp(extraBytes, SectorSize);
+  	ASSERT(freeMap->NumClear() >= extraSectors);
+    //start from
+    int i = numSectors, ii, iii; //direct/single/double indexing
+    //更新文件长度
+    numBytes += extraCharNum;
+    numSectors += extraSectors;
+    //direct indexing
+    for (; i < numSectors && i < NUMDIRECT; i++)
+        if ((dataSectors[i] = freeMap->Find()) == -1)
+            return FALSE;
+
+    //single indexing
+    if (numSectors > NUMDIRECT && i < NUMSINGLE)
+    {
+        int buffer[SECPERIND] = {0};
+        if (dataSectors[SINGLEINDEX])//一级索引是否已经存在？
+            synchDisk->ReadSector(dataSectors[SINGLEINDEX], (char *)buffer);
+        else if ((dataSectors[SINGLEINDEX] = freeMap->Find()) == -1)
+            return FALSE;
+        for (; i < numSectors && i < NUMSINGLE; i++)
+            if ((buffer[i - NUMDIRECT] = freeMap->Find()) == -1)
+                return FALSE;
+        synchDisk->WriteSector(dataSectors[SINGLEINDEX], (char *)buffer);
+    }
+
+    //double indexing
+    if (numSectors > NUMSINGLE)
+    {
+        ii = (i - NUMSINGLE) / SECPERIND;
+        iii = (i - NUMSINGLE) % SECPERIND;
+        int doubleBuffer[SECPERIND] = {0};
+        if (dataSectors[DOUBLEINDEX])
+            synchDisk->ReadSector(dataSectors[DOUBLEINDEX], (char *)doubleBuffer);
+        else if ((dataSectors[DOUBLEINDEX] = freeMap->Find()) == -1)
+            return FALSE;
+        for (; i < numSectors && ii < SECPERIND; ++ii)
+        {
+            int singleBuffer[SECPERIND] = {0};
+            if (doubleBuffer[ii])
+                synchDisk->ReadSector(doubleBuffer[ii], (char *)singleBuffer);
+            else if ((doubleBuffer[ii] = freeMap->Find()) == -1)
+                return FALSE;
+            for (; i < numSectors && iii < SECPERIND; i++, iii++)
+                if ((singleBuffer[iii] = freeMap->Find()) == -1)
+                    return FALSE;
+            iii %= SECPERIND;
+            synchDisk->WriteSector(doubleBuffer[ii], (char *)singleBuffer);
+        }
+        synchDisk->WriteSector(dataSectors[DOUBLEINDEX], (char *)doubleBuffer);
+    }
+    return TRUE;
+}
 ```
 
-在filehdr.cc中新增成员函数`expandFile`，该函数先判断当前的块是否为满块，如果不满，需要将extraSpace减去剩余的到达满块的字符数。然后调用exercise3中实现的Allocate()来分配需要的空间。
+经过前面的分析，openfile::writeAt()会导致文件长度发生变化。在写入时，我们要先判断position + numBytes是否会超过文件长度：
 
-> 这里为了保持接口不变，需要对Allocate()进行修改：在分配之前先判断索引的值是否为0？如果是，表示尚未分配，需要向位图申请空间。如果否，表示已分配，不做任何操作。这个方法的缺点是扩展长度都会从头开始遍历整个索引表，如果文件长度扩展很多次，那么时间开销会很大。思考：我们如何在保证程序执行效率的前提下，用最少的改动来达到目的？
->
-> 改进：
->
-> 在allocate开头根据fileSize计算出di,fi,si的值，它们分别表示直接/一级/二级索引的最后一项，每次分配都从该处开始即可。
+```cpp
+int OpenFile::WriteAt(char *from, int numBytes, int position)
+{
+    int fileLength = hdr->FileLength();
+    if (numBytes + position > fileLength)
+    {
+        BitMap *freeMap = new BitMap(SectorSize);
+        OpenFile *mapFile = new OpenFile(0);
+        freeMap->FetchFrom(mapFile);
+        if (!hdr->expandFile(freeMap, numBytes))
+        {
+            delete freeMap;
+            delete mapFile;
+            return -1;
+        }
+        freeMap->WriteBack(mapFile);
+      
+        hdr->WriteBack(hdr->GetInodeSector());
+        delete freeMap;
+        delete mapFile;
+        fileLength = hdr->FileLength();
+    }
+ 		...
+}
+```
+
+#### 测试
+
+我将使用`-t`来触发`code/filesys/fstest.cc`中定义的`PerformanceTest`。此测试函数将连续写入`Contents`（`"1234567890"`）5000次。然后阅读并最终将其删除。
+
+首先看看没有实现文件长度扩展时的测试结果：
+
+```shell
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -d f -t
+Initializing the file system.
+Sequential write of 50000 byte file, in 10 byte chunks
+Creating file TestFile, size 0
+Perf test: unable to write TestFile
+Opening file TestFile
+Perf test: unable to read TestFile
+Ticks: total 147020, idle 146050, system 970, user 0
+Disk I/O: reads 0, writes 0
+Console I/O: reads 0, writes 0
+Paging: faults 0
+Network I/O: packets received 0, sent 0
+```
+
+再看看实现了文件长度扩展之后的测试结果：
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -d f -t
+Initializing the file system.
+Sequential write of 50000 byte file, in 10 byte chunks
+Creating file TestFile, size 0
+===========succesfs allocate 0 sectors.=============
+Opening file TestFile
+===============expanding extra 1 sectors.====================1
+===============expanding extra 1 sectors.====================2
+===============expanding extra 1 sectors.====================3
+===============expanding extra 1 sectors.====================4
+===============expanding extra 1 sectors.====================5
+===============expanding extra 1 sectors.====================6
+===============expanding extra 1 sectors.====================7
+===============expanding extra 1 sectors.====================8
+===============expanding extra 1 sectors.====================9
+===============expanding extra 1 sectors.====================10
+===============expanding extra 1 sectors.====================11
+===============expanding extra 1 sectors.====================12
+===============expanding extra 1 sectors.====================13
+===============expanding extra 1 sectors.====================14
+===============expanding extra 1 sectors.====================15
+===============expanding extra 1 sectors.====================16
+===============expanding extra 1 sectors.====================17
+===============expanding extra 1 sectors.====================18
+===============expanding extra 1 sectors.====================19
+===============expanding extra 1 sectors.====================20
+===============expanding extra 1 sectors.====================21
+===============expanding extra 1 sectors.====================22
+===============expanding extra 1 sectors.====================23
+===============expanding extra 1 sectors.====================24
+===============expanding extra 1 sectors.====================25
+===============expanding extra 1 sectors.====================26
+===============expanding extra 1 sectors.====================27
+===============expanding extra 1 sectors.====================28
+===============expanding extra 1 sectors.====================29
+...//省略300行
+===============expanding extra 1 sectors.====================383
+===============expanding extra 1 sectors.====================384
+===============expanding extra 1 sectors.====================385
+===============expanding extra 1 sectors.====================386
+===============expanding extra 1 sectors.====================387
+===============expanding extra 1 sectors.====================388
+===============expanding extra 1 sectors.====================389
+===============expanding extra 1 sectors.====================390
+===============expanding extra 1 sectors.====================391
+Sequential read of 50000 byte file, in 10 byte chunks
+Opening file TestFile
+Ticks: total 533731020, idle 532287860, system 1443160, user 0
+Disk I/O: reads 40903, writes 7202
+Console I/O: reads 0, writes 0
+Paging: faults 0
+Network I/O: packets received 0, sent 0
+```
+
+#### 结论
+
+结果显示：在测试文件为50000B的情况下，初始化一个size为0的文件，每次写入十个字符，每当文件大小不足时，动态扩展一个sector，直到分配到391块时(391*128 = 50048)，结束，此时整个文件完成写入。并顺利执行文件读测试(没有报错`Perf test: unable to read TestFile`就证明读成功了），结论：实验结果正确。
 
 ## **二、文件访问的同步与互斥**
 
@@ -1168,7 +1314,14 @@ numSectors = 160, NUMFIRST = 54, numSectors - NUMFIRST = 170,numSectors = 160, N
 
 ## Assertion failed: line 123, file "../machine/disk.cc"
 
-在exercise3中将大文件copy进nachos会报错（在exercise3的测试结果中有标注）。这是报错对应行的代码：
+在exercise3中将大文件copy进nachos会报错。
+
+```cpp
+sectorNumber = -1219460751 
+Assertion failed: line 123, file "../machine/disk.cc"
+```
+
+这是`line 123, file "../machine/disk.cc"`的代码：
 
 ```cpp
 void
@@ -1211,3 +1364,44 @@ Bit map file header:
 ```
 
 没有再报错了，其他与exercise3中的结果一致，不再赘述。
+
+## Perf test: unable to write TestFile
+
+在做exercise5的时候，每次执行`./Nachos -d f -t`都会报错`Perf test: unable to write TestFile`,证明我们的expandFile实现错了。审查源代码：
+
+```cpp
+static void
+FileWrite()
+{
+    OpenFile *openFile;
+    int i, numBytes;
+
+    printf("Sequential write of %d byte file, in %d byte chunks\n",
+           FileSize, ContentSize);
+    if (!fileSystem->Create(FileName, 0))
+    {
+        printf("Perf test: can't create %s\n", FileName);
+        return;
+    }
+    openFile = fileSystem->Open(FileName);
+    if (openFile == NULL)
+    {
+        printf("Perf test: unable to open %s\n", FileName);
+        return;
+    }
+
+
+    for (i = 0; i < FileSize; i += ContentSize)
+    {
+        numBytes = openFile->Write(Contents, ContentSize);
+        if (numBytes < 10)
+        {
+            printf("Perf test: unable to write %s\n", FileName);
+            delete openFile;
+            return;
+        }
+    }
+    delete openFile; // close file
+}
+```
+

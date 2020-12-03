@@ -94,7 +94,7 @@ public:
 	bool Mkdir(char *name); //在当前目录下创建目录
 
 private:
-	Directory *currentDirectory;
+
 	OpenFile *freeMapFile;	 // Bit map of free disk blocks,
 							 // represented as a file
 	OpenFile *directoryFile; // "Root" directory -- list of

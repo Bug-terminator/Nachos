@@ -120,8 +120,8 @@ FileSystem::FileSystem(bool format)
 
         freeMapFile = new OpenFile(FreeMapSector);
         directoryFile = new OpenFile(DirectorySector);
-        //lab4 exercise4
-        currentDirectory->FetchFrom(directoryFile);
+        
+        
         // Once we have the files "open", we can write the initial version
         // of each file back to disk.  The directory at this point is completely
         // empty; but the bitmap has been changed to reflect the fact that
@@ -365,14 +365,14 @@ void FileSystem::Print()
 // FileSystem::Mkdir
 // 在当前目录下创建指定名称的子目录
 //----------------------------------------------------------------------
-bool FileSystem::Mkdir(char *dirname)
-{
-    Create(dirname, DirectoryFileSize);
-    OpenFile *dirFile = Open(dirname);
-    Directory *dir;
-    dir->FetchFrom(dirFile);
-    dir->Add("./", currentDirectory->Find(dirname));
-    dir->Add("../", currentDirectory->Find("./"));
-    dir->WriteBack(dirFile);
-    return TRUE;
-}
+// bool FileSystem::Mkdir(char *dirname)
+// {
+//     Create(dirname, DirectoryFileSize);
+//     OpenFile *dirFile = Open(dirname);
+//     Directory *dir;
+//     dir->FetchFrom(dirFile);
+//     dir->Add("./", currentDirectory->Find(dirname));
+//     dir->Add("../", currentDirectory->Find("./"));
+//     dir->WriteBack(dirFile);
+//     return TRUE;
+// }
