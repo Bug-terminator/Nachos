@@ -63,6 +63,8 @@ extern void ThreadTest(void), Copy(char *unixFile, char *nachosFile);
 extern void Print(char *file), PerformanceTest(void);
 extern void StartProcess(char *file), ConsoleTest(char *in, char *out), startMultiProcess(char *filename); //lab2 多线程
 extern void MailTest(int networkID);
+//lab4 exercise6
+extern void SynchConsoleTest(char*, char*);
 
 //----------------------------------------------------------------------
 // main
@@ -85,25 +87,24 @@ int main(int argc, char **argv)
 	DEBUG('t', "Entering main");
 	(void)Initialize(argc, argv);
 
+	// #ifdef THREADS && NTEST_FILESYS
+	// 	for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount)
+	// 	{
+	// 		argCount = 1;
+	// 		switch (argv[0][1])
+	// 		{
+	// 		case 'q':
+	// 			testnum = atoi(argv[1]);
+	// 			argCount++;
+	// 			break;
+	// 		default:
+	// 			testnum = 1;
+	// 			break;
+	// 		}
+	// 	}
 
-// #ifdef THREADS && NTEST_FILESYS
-// 	for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount)
-// 	{
-// 		argCount = 1;
-// 		switch (argv[0][1])
-// 		{
-// 		case 'q':
-// 			testnum = atoi(argv[1]);
-// 			argCount++;
-// 			break;
-// 		default:
-// 			testnum = 1;
-// 			break;
-// 		}
-// 	}
-
-// 	ThreadTest();
-// #endif
+	// 	ThreadTest();
+	// #endif
 
 	for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount)
 	{
@@ -132,6 +133,20 @@ int main(int argc, char **argv)
 							   // Nachos will loop forever waiting
 							   // for console input
 		}
+		else if (!strcmp(*argv, "-sct"))
+		{ // test the synchronous console
+			if (argc == 1)
+			{
+				SynchConsoleTest(NULL, NULL);
+			}
+			else
+			{
+				ASSERT(argc > 2);
+				SynchConsoleTest(*(argv + 1), *(argv + 2));
+				argCount = 3;
+			}
+			interrupt->Halt(); 
+		}
 #endif // USER_PROGRAM
 #ifdef FILESYS
 		if (!strcmp(*argv, "-cp"))
@@ -140,7 +155,7 @@ int main(int argc, char **argv)
 			Copy(*(argv + 1), *(argv + 2));
 			argCount = 3;
 		}
-		else if(!strcmp(*argv, "-Q"))
+		else if (!strcmp(*argv, "-Q"))
 		{
 			verbose = true;
 		}
@@ -157,7 +172,7 @@ int main(int argc, char **argv)
 			fileSystem->Remove(*(argv + 1));
 			argCount = 2;
 		}
-		
+
 		else if (!strcmp(*argv, "-l"))
 		{ // list Nachos directory
 			fileSystem->List();
@@ -176,8 +191,8 @@ int main(int argc, char **argv)
 		{
 			ASSERT(argc > 1);
 			Delay(2); // delay for 2 seconds
-				// to give the user time to
-				// start up another nachos
+					  // to give the user time to
+					  // start up another nachos
 			MailTest(atoi(*(argv + 1)));
 			argCount = 2;
 		}

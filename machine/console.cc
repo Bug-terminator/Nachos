@@ -1,4 +1,4 @@
-// console.cc 
+// console.cc
 //	Routines to simulate a serial port to a console device.
 //	A console has input (a keyboard) and output (a display).
 //	These are each simulated by operations on UNIX files.
@@ -10,7 +10,7 @@
 //  DO NOT CHANGE -- part of the machine emulation
 //
 // Copyright (c) 1992-1993 The Regents of the University of California.
-// All rights reserved.  See copyright.h for copyright notice and limitation 
+// All rights reserved.  See copyright.h for copyright notice and limitation
 // of liability and disclaimer of warranty provisions.
 
 #include "copyright.h"
@@ -18,10 +18,16 @@
 #include "system.h"
 
 // Dummy functions because C++ is weird about pointers to member functions
-static void ConsoleReadPoll(int c) 
-{ Console *console = (Console *)c; console->CheckCharAvail(); }
+static void ConsoleReadPoll(int c)
+{
+    Console *console = (Console *)c;
+    console->CheckCharAvail();
+}
 static void ConsoleWriteDone(int c)
-{ Console *console = (Console *)c; console->WriteDone(); }
+{
+    Console *console = (Console *)c;
+    console->WriteDone();
+}
 
 //----------------------------------------------------------------------
 // Console::Console
@@ -36,17 +42,17 @@ static void ConsoleWriteDone(int c)
 //		output
 //----------------------------------------------------------------------
 
-Console::Console(char *readFile, char *writeFile, VoidFunctionPtr readAvail, 
-		VoidFunctionPtr writeDone, int callArg)
+Console::Console(char *readFile, char *writeFile, VoidFunctionPtr readAvail,
+                 VoidFunctionPtr writeDone, int callArg)
 {
     if (readFile == NULL)
-	readFileNo = 0;					// keyboard = stdin
+        readFileNo = 0; // keyboard = stdin
     else
-    	readFileNo = OpenForReadWrite(readFile, TRUE);	// should be read-only
+        readFileNo = OpenForReadWrite(readFile, TRUE); // should be read-only
     if (writeFile == NULL)
-	writeFileNo = 1;				// display = stdout
+        writeFileNo = 1; // display = stdout
     else
-    	writeFileNo = OpenForWrite(writeFile);
+        writeFileNo = OpenForWrite(writeFile);
 
     // set up the stuff to emulate asynchronous interrupts
     writeHandler = writeDone;
@@ -67,9 +73,9 @@ Console::Console(char *readFile, char *writeFile, VoidFunctionPtr readAvail,
 Console::~Console()
 {
     if (readFileNo != 0)
-	Close(readFileNo);
+        Close(readFileNo);
     if (writeFileNo != 1)
-	Close(writeFileNo);
+        Close(writeFileNo);
 }
 
 //----------------------------------------------------------------------
@@ -79,28 +85,27 @@ Console::~Console()
 //
 //	Only read it in if there is buffer space for it (if the previous
 //	character has been grabbed out of the buffer by the Nachos kernel).
-//	Invoke the "read" interrupt handler, once the character has been 
-//	put into the buffer. 
+//	Invoke the "read" interrupt handler, once the character has been
+//	put into the buffer.
 //----------------------------------------------------------------------
 
-void
-Console::CheckCharAvail()
+void Console::CheckCharAvail()
 {
     char c;
 
     // schedule the next time to poll for a packet
-    interrupt->Schedule(ConsoleReadPoll, (int)this, ConsoleTime, 
-			ConsoleReadInt);
+    interrupt->Schedule(ConsoleReadPoll, (int)this, ConsoleTime,
+                        ConsoleReadInt);
 
     // do nothing if character is already buffered, or none to be read
     if ((incoming != EOF) || !PollFile(readFileNo))
-	return;	  
+        return;
 
     // otherwise, read character and tell user about it
     Read(readFileNo, &c, sizeof(char));
-    incoming = c ;
+    incoming = c;
     stats->numConsoleCharsRead++;
-    (*readHandler)(handlerArg);	
+    (*readHandler)(handlerArg);
 }
 
 //----------------------------------------------------------------------
@@ -110,8 +115,7 @@ Console::CheckCharAvail()
 //	completed.
 //----------------------------------------------------------------------
 
-void
-Console::WriteDone()
+void Console::WriteDone()
 {
     putBusy = FALSE;
     stats->numConsoleCharsWritten++;
@@ -124,27 +128,87 @@ Console::WriteDone()
 //	Either return the character, or EOF if none buffered.
 //----------------------------------------------------------------------
 
-char
-Console::GetChar()
+char Console::GetChar()
 {
-   char ch = incoming;
+    char ch = incoming;
 
-   incoming = EOF;
-   return ch;
+    incoming = EOF;
+    return ch;
 }
 
 //----------------------------------------------------------------------
 // Console::PutChar()
-// 	Write a character to the simulated display, schedule an interrupt 
+// 	Write a character to the simulated display, schedule an interrupt
 //	to occur in the future, and return.
 //----------------------------------------------------------------------
 
-void
-Console::PutChar(char ch)
+void Console::PutChar(char ch)
 {
     ASSERT(putBusy == FALSE);
     WriteFile(writeFileNo, &ch, sizeof(char));
     putBusy = TRUE;
     interrupt->Schedule(ConsoleWriteDone, (int)this, ConsoleTime,
-					ConsoleWriteInt);
+                        ConsoleWriteInt);
+}
+
+
+
+
+//lab4 exercise4
+//dummy function，cpp不允许成员函数作为函数指针
+static void dummyReadAvail(int addr)
+{
+    SynchConsole *synchConsole = (SynchConsole *)addr;
+    synchConsole->ReadAvail();
+}
+static void dummyWriteDown(int addr)
+{
+    SynchConsole *synchConsole = (SynchConsole *)addr;
+    synchConsole->WriteDone();
+}
+//----------------------------------------------------------------------
+// SynchConsole::SynchConsole
+//----------------------------------------------------------------------
+SynchConsole::SynchConsole(char *readFile, char *writeFile)
+{
+    lock = new Lock("scLock");
+    mutex_readAvail = new Semaphore("scmutex_r", 0);
+    mutex_writeDone = new Semaphore("scmutex_w", 0);
+    console = new Console(readFile, writeFile, dummyReadAvail, dummyWriteDown, (int)this);
+}
+
+SynchConsole::~SynchConsole()
+{
+    delete lock;
+    delete mutex_readAvail;
+    delete mutex_writeDone;
+    delete console;
+}
+
+void SynchConsole::PutChar(char ch)
+{
+    lock->Acquire();
+    console->PutChar(ch);
+    mutex_writeDone->P();
+    lock->Release();
+}
+
+char SynchConsole::GetChar()
+{
+    char c;
+    lock->Acquire();
+    mutex_readAvail->P();
+    c = console->GetChar();
+    lock->Release();
+    return c;
+}
+
+void SynchConsole::ReadAvail()
+{
+    mutex_readAvail->V();
+}
+
+void SynchConsole::WriteDone()
+{
+    mutex_writeDone->V();
 }

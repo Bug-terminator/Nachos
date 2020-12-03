@@ -213,16 +213,6 @@ bool FileSystem::Create(char *name, int initialSize)
                 success = FALSE; // no space on disk for data
             else
             {
-                //lab4 exercise2
-                // char *p = name;
-                // while (*p != '.' && *p != '\0')
-                //     p++;
-
-                // if (*p == '.')
-                //     hdr->SetFileType(NORM);
-                // else
-                //     hdr->SetFileType(DIR);
-
                 success = TRUE;
                 // everthing worked, flush all changes back to disk
                 hdr->WriteBack(sector);
@@ -318,7 +308,6 @@ bool FileSystem::Remove(char *name)
 void FileSystem::List()
 {
     Directory *directory = new Directory(NumDirEntries);
-
     directory->FetchFrom(directoryFile);
     directory->List();
     delete directory;

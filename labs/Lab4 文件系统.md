@@ -99,46 +99,6 @@ echo "=== tests the performance of the Nachos file system ==="
 
 TODO
 
-#### synchdisk.cc synchdisk.h
-
-> 和其它设备一样，Nachos 模拟的磁盘是异步设备。当发出访问磁盘的请求后立刻返回，当从磁盘读出或写入数据结束后，发出磁盘中断，说明一次磁盘访问真正结束。
->
-> Nachos 是一个多线程的系统，如果多个线程同时对磁盘进行访问，会引起系统的混乱。所以必须作出这样的限制： 
->
-> - 同时只能有一个线程访问磁盘 
->
-> - 当发出磁盘访问请求后，必须等待访问的真正结束。 这两个限制就是实现同步磁盘的目的。
-
-```cpp
-class SynchDisk
-{
-public:
-  SynchDisk(char *name); // 生成一个同步磁盘
-  ~SynchDisk();          // 析构磁盘
-  void ReadSector(int sectorNumber, char *data); //同步读写磁盘，只有
-  void WriteSector(int sectorNumber, char *data);//当真正读写结束才返回
-  void RequestDone(); // 磁盘中断处理函数
-private:
-  Disk *disk;           // 物理异步磁盘设备
-  Semaphore *semaphore; // 读写磁盘的信号量
-  Lock *lock;           // 控制只有一个线程读写磁盘的锁
-};
-```
-
-以ReadSector为例来说明同步磁盘的工作机制：
-
-```cpp
-void SynchDisk::ReadSector(int sectorNumber, char *data)
-{
-    lock->Acquire(); // 一次只允许一个线程访问磁盘
-    disk->ReadRequest(sectorNumber, data); //请求读取磁盘
-    semaphore->P();  // 等待磁盘中断的到来
-    lock->Release(); // 释放锁
-}
-```
-
-> 当线程向磁盘设备发出读访问请求后，等待磁盘中断的到来。一旦磁盘中断来到，中断处理程序执行semaphore->V()操作，ReadSector得以继续运行。对磁盘同步写也基于同样的原理。
-
 #### bitmap.cc bitmap.h
 
 > 在 Nachos 的文件系统中，是通过位图来管理空闲块的。Nachos 的物理磁盘是以扇区为访问单位的，将扇区从 0 开始编号。所谓位图管理，就是将这些编号填入一张表，表中为 0 的地 方说明该扇区没有被占用，而非 0 位置说明该扇区已被占用。这部分内容是用 BitMap 类实现的。
@@ -409,15 +369,14 @@ Linux中文件名的存储方式为char[],这引起了我的反思。为什么�
 
 ```cpp
 //乱码
-Created: KSt10moneypunctIcLb1EE13negative_signEvModified: KSt10moneypunctIcLb1EE13negative_signEvVisited: 
-KSt10moneypunctIcLb1EE13negative_signEvFileHeader 
+Created: KSt10moneypunctIcLb1EE13negative_signEv
+Modified: KSt10moneypunctIcLb1EE13negative_signEv
+Visited: KSt10moneypunctIcLb1EE13negative_signEvFileHeader 
 ```
 
 #### 重新扩展文件属性
 
 将时间类的变量用`time_t (sizeof(time_t) = 4)`来存储，然后调用`timeToString()`函数进行转换。文件名还是要用char[]来存储，文件名最大长度可以通过修改FileNameMaxLen宏，考虑到nachos磁盘空间实在有些小，我暂时将其修改为20，如果以后有需要，再修改。
-
-> linux还专门写了个match()函数，而不用strncmp() https://zhuanlan.zhihu.com/p/60593133
 
 ### Exercise 3 扩展文件长度
 
@@ -1080,17 +1039,19 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 // FileHeader::expandFile
 // 扩展文件大小
 //----------------------------------------------------------------------
-bool FileHeader::expandFile(BitMap *freeMap, int extraCharNum)
+bool FileHeader::expandFile(BitMap *freeMap, int extraBytes)
 {
-    //计算额外字节数，额外磁盘数
-    int extraBytes = extraCharNum - (numSectors * SectorSize - numBytes), 
-        extraSectors = divRoundUp(extraBytes, SectorSize);
-  	ASSERT(freeMap->NumClear() >= extraSectors);
+    //计算额外额外磁盘数
+    int extraSectors = divRoundUp(extraBytes, SectorSize);
+    ASSERT(freeMap->NumClear() >= extraSectors);
     //start from
     int i = numSectors, ii, iii; //direct/single/double indexing
     //更新文件长度
-    numBytes += extraCharNum;
+    // numBytes += extraCharNum;
     numSectors += extraSectors;
+    numBytes = numSectors * SectorSize;
+    DEBUG('f', "===============expanding extra %d sectors.====================%d\n", extraSectors, numSectors);
+
     //direct indexing
     for (; i < numSectors && i < NUMDIRECT; i++)
         if ((dataSectors[i] = freeMap->Find()) == -1)
@@ -1100,7 +1061,7 @@ bool FileHeader::expandFile(BitMap *freeMap, int extraCharNum)
     if (numSectors > NUMDIRECT && i < NUMSINGLE)
     {
         int buffer[SECPERIND] = {0};
-        if (dataSectors[SINGLEINDEX])//一级索引是否已经存在？
+        if (dataSectors[SINGLEINDEX]) //一级索引是否已经存在？
             synchDisk->ReadSector(dataSectors[SINGLEINDEX], (char *)buffer);
         else if ((dataSectors[SINGLEINDEX] = freeMap->Find()) == -1)
             return FALSE;
@@ -1157,7 +1118,6 @@ int OpenFile::WriteAt(char *from, int numBytes, int position)
             return -1;
         }
         freeMap->WriteBack(mapFile);
-      
         hdr->WriteBack(hdr->GetInodeSector());
         delete freeMap;
         delete mapFile;
@@ -1171,7 +1131,7 @@ int OpenFile::WriteAt(char *from, int numBytes, int position)
 
 我将使用`-t`来触发`code/filesys/fstest.cc`中定义的`PerformanceTest`。此测试函数将连续写入`Contents`（`"1234567890"`）5000次。然后阅读并最终将其删除。
 
-首先看看没有实现文件长度扩展时的测试结果：
+首先看看没有实现文件长度扩展时的报错信息：`Perf test: unable to write TestFile`和`Perf test: unable to read TestFile`
 
 ```shell
 vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -d f -t
@@ -1193,10 +1153,10 @@ Network I/O: packets received 0, sent 0
 ```cpp
 vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -d f -t
 Initializing the file system.
-Sequential write of 50000 byte file, in 10 byte chunks
 Creating file TestFile, size 0
 ===========succesfs allocate 0 sectors.=============
 Opening file TestFile
+Sequential write of 50000 byte file, in 10 byte chunks
 ===============expanding extra 1 sectors.====================1
 ===============expanding extra 1 sectors.====================2
 ===============expanding extra 1 sectors.====================3
@@ -1226,7 +1186,7 @@ Opening file TestFile
 ===============expanding extra 1 sectors.====================27
 ===============expanding extra 1 sectors.====================28
 ===============expanding extra 1 sectors.====================29
-...//省略300行
+...
 ===============expanding extra 1 sectors.====================383
 ===============expanding extra 1 sectors.====================384
 ===============expanding extra 1 sectors.====================385
@@ -1259,6 +1219,187 @@ Network I/O: packets received 0, sent 0
 >
 > b)    利用异步访问模拟磁盘的工作原理，在Class Console的基础上，实现Class SynchConsole。
 
+#### synchdisk.cc synchdisk.h
+
+> 和其它设备一样，Nachos 模拟的磁盘是异步设备。当发出访问磁盘的请求后立刻返回，当从磁盘读出或写入数据结束后，发出磁盘中断，说明一次磁盘访问真正结束。
+>
+> Nachos 是一个多线程的系统，如果多个线程同时对磁盘进行访问，会引起系统的混乱。所以必须作出这样的限制： 
+>
+> - 同时只能有一个线程访问磁盘 
+>
+> - 当发出磁盘访问请求后，必须等待访问的真正结束。 这两个限制就是实现同步磁盘的目的。
+
+```cpp
+class SynchDisk
+{
+public:
+  SynchDisk(char *name); // 生成一个同步磁盘
+  ~SynchDisk();          // 析构磁盘
+  void ReadSector(int sectorNumber, char *data); //同步读写磁盘，只有
+  void WriteSector(int sectorNumber, char *data);//当真正读写结束才返回
+  void RequestDone(); // 磁盘中断处理函数
+private:
+  Disk *disk;           // 物理异步磁盘设备
+  Semaphore *semaphore; // 读写磁盘的信号量
+  Lock *lock;           // 控制只有一个线程读写磁盘的锁
+};
+```
+
+以ReadSector为例来说明同步磁盘的工作机制：
+
+```cpp
+void SynchDisk::ReadSector(int sectorNumber, char *data)
+{
+    lock->Acquire(); // 一次只允许一个线程访问磁盘
+    disk->ReadRequest(sectorNumber, data); //请求读取磁盘
+    semaphore->P();  // 等待磁盘中断的到来
+    lock->Release(); // 释放锁
+}
+```
+
+> 当线程向磁盘设备发出读访问请求后，等待磁盘中断的到来。一旦磁盘中断来到，中断处理程序执行semaphore->V()操作，ReadSector得以继续运行。对磁盘同步写也基于同样的原理。
+
+#### 实现Class SynchConsole
+
+> Nachos的终端操作有严格的工作顺序，对读终端来说： CheckCharAvail -> GetChar -> CheckCharAvail -> GetChar ->... 系统通过定期的读终端中断来判断终端是否有内容供读取，如果有则读出；如果没有，下一 次读终端中断继续判断。读出的内容将一直保留到 GetChar 将其读走。 对写终端来说： PutChar -> WriteDone -> PutChar -> WriteDone -> ... 系统发出一个写终端命令 PutChar，模拟系统将直接向终端输出文件写入要写的内容，但是 对 Nachos 来说，整个写的过程并没有结束，只有当写终端中断来到后整个写过程才算结束。
+
+我们可以仿照SynchDisk，在Console的基础上实现SynchConsole。
+
+- 同时只有一个线程访问（Lock）
+- 发出读写请求时，需要等待上一个读写真正结束（semaphore&interrupt）
+
+其实在consoleTest中已经实现了第二步，我们需要将它的操作封装到类里面。
+
+```cpp
+void ConsoleTest(char *in, char *out)
+{
+    for (;;)
+    {
+        readAvail->P(); // wait for character to arrive
+        ch = console->GetChar();
+        console->PutChar(ch); // echo it!
+        writeDone->P();       // wait for write to finish
+        if (ch == 'q')
+            return; // if q, quit
+    }
+}
+```
+
+然后加入一个Lock来实现条件一：
+
+```cpp
+class SynchConsole
+{
+public:
+  SynchConsole(char *readFile, char *writeFile);
+  ~SynchConsole();
+  void PutChar(char ch);
+  char GetChar();
+  void ReadAvail();
+  void WriteDone();
+
+private:
+  Console *console;
+  Lock *lock;
+  Semaphore *mutex_readAvail;
+  Semaphore *mutex_writeDone;
+};
+
+//lab4 exercise4
+//dummy function，cpp不允许成员函数作为函数指针
+static void dummyReadAvail(int addr)
+{
+    SynchConsole *synchConsole = (SynchConsole *)addr;
+    synchConsole->ReadAvail();
+}
+static void dummyWriteDown(int addr)
+{
+    SynchConsole *synchConsole = (SynchConsole *)addr;
+    synchConsole->WriteDone();
+}
+//----------------------------------------------------------------------
+// SynchConsole::SynchConsole
+//----------------------------------------------------------------------
+SynchConsole::SynchConsole(char *readFile, char *writeFile)
+{
+    lock = new Lock("scLock");
+    mutex_readAvail = new Semaphore("scmutex_r", 0);
+    mutex_writeDone = new Semaphore("scmutex_w", 0);
+    console = new Console(readFile, writeFile, dummyReadAvail, dummyWriteDown, 0);
+}
+
+SynchConsole::~SynchConsole()
+{
+    delete lock;
+    delete mutex_readAvail;
+    delete mutex_writeDone;
+    delete console;
+}
+
+void SynchConsole::PutChar(char ch)
+{
+    lock->Acquire();
+    console->PutChar(ch);
+    mutex_writeDone->P();
+    lock->Release();
+}
+
+char SynchConsole::GetChar()
+{
+    char c;
+    lock->Acquire();
+    mutex_readAvail->P();
+    c = console->GetChar();
+    lock->Release();
+    return c;
+}
+
+void SynchConsole::ReadAvail()
+{
+    mutex_readAvail->V();
+}
+
+void SynchConsole::WriteDone()
+{
+    mutex_writeDone->V();
+}
+```
+
+#### 测试
+
+测试函数synchConsoleTest仿照consoleTest，均位于code/usrprog/progtest.cc中，并且在main.cc中添加触发条件 -sct,
+
+```cpp
+void SynchConsoleTest(char *in, char *out)
+{
+    char ch;
+    SynchConsole *synchConsole = new SynchConsole(in, out);
+    for (;;)
+    {
+        ch = synchConsole->GetChar();
+        synchConsole->PutChar(ch); 
+        if (ch == 'q')
+            return; // if q, quit
+    }
+}
+```
+
+测试结果如下：
+
+```shell
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -sct
+woaini
+woaini
+zhongguo
+zhongguo
+wodemuqin
+wodemuqMachine halting!
+```
+
+#### 结论
+
+结果显示，在单线程下同步控制台能够正常工作，还没有测试多线程下的正确性，等实现了shell再测试（todo）。
+
 ### Exercise 7 实现文件系统的同步互斥访问机制，达到如下效果：
 
 > a)    一个文件可以同时被多个线程访问。且每个线程独自打开文件，独自拥有一个当前文件访问位置，彼此间不会互相干扰。
@@ -1267,7 +1408,16 @@ Network I/O: packets received 0, sent 0
 >
 > c)    当某一线程欲删除一个文件，而另外一些线程正在访问该文件时，需保证所有线程关闭了这个文件，该文件才被删除。也就是说，只要还有一个线程打开了这个文件，该文件就不能真正地被删除。
 
- 
+#### 背景知识：
+
+> [Linux文件描述符（File Descriptor）简介](https://segmentfault.com/a/1190000009724931)
+>
+> ![image-20201203221158713](Lab4 文件系统.assets/image-20201203221158713.png)
+
+我们可以借鉴Linux对于文件的管理方式--文件描述符，来实现对文件读写的管理：
+
+1. 系统维护一个数组FileDescriptor[MAXOPENFILENUM]，每一项对应openFile的inode；
+2. 每次有线程申请打开文件（syscall）时，系统都会check这个数组：如果文件已经打开，返回它的描述符；否则重新分配一个文件描述符
 
 ## 三、Challenges （至少选做1个）
 
@@ -1363,34 +1513,17 @@ Generate the large file for double indirect indexing
 Bit map file header:
 ```
 
-没有再报错了，其他与exercise3中的结果一致，不再赘述。
+没有再报错了，其他与exercise3中的结果一致。
 
 ## Perf test: unable to write TestFile
 
-在做exercise5的时候，每次执行`./Nachos -d f -t`都会报错`Perf test: unable to write TestFile`,证明我们的expandFile实现错了。审查源代码：
+在做exercise5的时候，每次执行`./Nachos -d f -t`都会报错`Perf test: unable to write TestFile`,审查源代码：
 
 ```cpp
 static void
 FileWrite()
 {
-    OpenFile *openFile;
-    int i, numBytes;
-
-    printf("Sequential write of %d byte file, in %d byte chunks\n",
-           FileSize, ContentSize);
-    if (!fileSystem->Create(FileName, 0))
-    {
-        printf("Perf test: can't create %s\n", FileName);
-        return;
-    }
-    openFile = fileSystem->Open(FileName);
-    if (openFile == NULL)
-    {
-        printf("Perf test: unable to open %s\n", FileName);
-        return;
-    }
-
-
+    ...
     for (i = 0; i < FileSize; i += ContentSize)
     {
         numBytes = openFile->Write(Contents, ContentSize);
@@ -1404,4 +1537,41 @@ FileWrite()
     delete openFile; // close file
 }
 ```
+
+只有当numBytes<10时会报错，继续看openFile->Write(), 里面有这么一句：
+
+```cpp
+if ((numBytes <= 0) || (position >= fileLength))
+        return 0; // check request
+```
+
+满足该条件会导致返回0，我打印了position和fileLength，
+
+```cpp
+in openfile begining ,fileLength: 0  position:0
+===============expanding extra 1 sectors.====================1
+in openfile begining ,fileLength: 10 position:10
+Perf test: unable to write TestFile
+```
+
+原来错误出在fileLength上了，我改了下面两处：
+
+```cpp
+bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
+{
+    ...
+    numSectors = divRoundUp(fileSize, SectorSize);
+    numBytes = numSectors * SectorSize;
+		...
+}  
+bool FileHeader::expandFile(BitMap *freeMap, int extraBytes)
+{
+  	...
+    numSectors += extraSectors;
+    numBytes = numSectors * SectorSize;
+  	...
+}
+```
+
+即将numBytes的定义改为当前文件的最大容量(B)，成功解决bug。
 

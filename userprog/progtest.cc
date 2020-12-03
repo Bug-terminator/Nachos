@@ -84,7 +84,7 @@ void ConsoleTest(char *in, char *out)
     }
 }
 
-//lab2 实现多线程 
+//lab2 实现多线程
 //初始化地址空间
 
 Thread *
@@ -102,17 +102,16 @@ initThreadSpace(OpenFile *executable, int number)
     return thread;
 }
 
-
 void runUserProg(int number)
 {
     printf("Running user program thread %d\n", number);
     currentThread->space->InitRegisters(); // set the initial register values
     currentThread->space->RestoreState();  // load page table register
     // currentThread->space->PrintState();    // debug usage
-    machine->Run();                        // jump to the user progam
-    ASSERT(FALSE);                         // machine->Run never returns;
-                                           // the address space exits
-                                           // by doing the syscall "exit"
+    machine->Run(); // jump to the user progam
+    ASSERT(FALSE);  // machine->Run never returns;
+                    // the address space exits
+                    // by doing the syscall "exit"
 }
 
 #define N 3
@@ -135,4 +134,19 @@ void startMultiProcess(char *filename)
     }
     delete executable; // close file
     currentThread->Yield();
+}
+
+//lab4 exercise6
+
+void SynchConsoleTest(char *in, char *out)
+{
+    char ch;
+    SynchConsole *synchConsole = new SynchConsole(in, out);
+    for (;;)
+    {
+        ch = synchConsole->GetChar();
+        synchConsole->PutChar(ch); 
+        if (ch == 'q')
+            return; // if q, quit
+    }
 }
