@@ -16,4 +16,3 @@ PKU OS course project and notes based on Nachos
 | Lab 3 | [Virtual Memory](labs\Lab2.md)                      | TLB, demand paging, replacement algorithm and user program |
 | Lab 4 | [File System](labs\Lab4.md)                         | Improve current file system                                |
 | Lab 5 | [System Call](labs\Lab5.md)                         | Implement all system calls                                 |
-if the links turns out 404, please check out file "labs".
