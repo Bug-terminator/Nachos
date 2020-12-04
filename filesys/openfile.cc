@@ -119,7 +119,7 @@ int OpenFile::Write(char *into, int numBytes)
 
 int OpenFile::ReadAt(char *into, int numBytes, int position)
 {
-    synchDisk->rwLock[hdr->GetInodeSector()]->ReaderAcquire();
+    // synchDisk->rwLock[hdr->GetInodeSector()]->ReaderAcquire();
     int fileLength = hdr->FileLength();
     int i, firstSector, lastSector, numSectors;
     char *buf;
@@ -147,13 +147,13 @@ int OpenFile::ReadAt(char *into, int numBytes, int position)
 
     //lab4 exercise2
     hdr->SetLastVisitedTime();
-    synchDisk->rwLock[hdr->GetInodeSector()]->ReaderRelease();
+    // synchDisk->rwLock[hdr->GetInodeSector()]->ReaderRelease();
     return numBytes;
 }
 
 int OpenFile::WriteAt(char *from, int numBytes, int position)
 {
-    synchDisk->rwLock[hdr->GetInodeSector()]->WriterAcquire();
+    // synchDisk->rwLock[hdr->GetInodeSector()]->WriterAcquire();
 
     int fileLength = hdr->FileLength();
 
@@ -219,7 +219,7 @@ int OpenFile::WriteAt(char *from, int numBytes, int position)
     //lab4 exercise2
     hdr->SetLastModifiedTime();
     hdr->SetLastVisitedTime();
-    synchDisk->rwLock[hdr->GetInodeSector()]->WriterRelease();
+    // synchDisk->rwLock[hdr->GetInodeSector()]->WriterRelease();
     return numBytes;
 }
 

@@ -42,8 +42,8 @@ DiskRequestDone(int arg)
 
 SynchDisk::SynchDisk(char *name)
 {
-    for (int i = 0; i < NumSectors; ++i)
-        rwLock[i] = new RWLock("synRWLock");
+    // for (int i = 0; i < NumSectors; ++i)
+    //     rwLock[i] = new RWLock("synRWLock");
     semaphore = new Semaphore("synch disk", 0);
     lock = new Lock("synch disk lock");
     disk = new Disk(name, DiskRequestDone, (int)this);
@@ -58,7 +58,7 @@ SynchDisk::SynchDisk(char *name)
 SynchDisk::~SynchDisk()
 {
 
-    delete[] rwLock;
+    // delete[] rwLock;
     delete disk;
     delete lock;
     delete semaphore;
