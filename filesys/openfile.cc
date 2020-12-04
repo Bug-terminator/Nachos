@@ -34,7 +34,7 @@ OpenFile::OpenFile(int sector)
     hdr->SetInodeSector(sector);
     seekPosition = 0;
     //lab4 exercise7
-    synchDisk->thraedsPerFile[sector]++;
+    // synchDisk->thraedsPerFile[sector]++;
 }
 
 //----------------------------------------------------------------------
@@ -47,7 +47,7 @@ OpenFile::~OpenFile()
     //lab4 exercise2
     hdr->WriteBack(hdr->GetInodeSector());
     //lab4 exercise7
-    synchDisk->thraedsPerFile[hdr->GetInodeSector()]--;
+    // synchDisk->thraedsPerFile[hdr->GetInodeSector()]--;
     delete hdr;
 }
 

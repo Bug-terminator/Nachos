@@ -42,8 +42,8 @@ class SynchDisk {
 					// handler, to signal that the
 					// current disk operation is complete.
     //lab4 exercise7
-    RWLock* rwLock[NumSectors];
-    int thraedsPerFile[NumSectors];
+    // RWLock* rwLock[NumSectors];
+    // int thraedsPerFile[NumSectors];
   private:
     Disk *disk;		  		// Raw disk device
     Semaphore *semaphore; 		// To synchronize requesting thread 
