@@ -32,37 +32,6 @@ todo:makedep
 | Challenge1 |  Y   |
 | Challenge2 |  Y   |
 
-## 准备工作
-
-> 我在main.cc中添加了-q(means quite)指令来关闭`verbose`变量，这样系统就不会每次都在halt时输出冗长的系统信息。为了测试文件系统，我写了一个脚本文件，主要用来测试文件系统的各种debug指令。在`terminal`中输入`my_script.sh`即可运行我放在`code/filesys/test/my_script`的脚本文件。这是脚本文件的内容：
-
-```sh
-# goto filesys/ in vagrant
-cd /vagrant/nachos/nachos-3.4/code/filesys
-
-# use -q to disable verbose machine messages
-echo "=== format the DISK ==="
-./nachos -q -f
-echo "=== copies file \"big\" from UNIX to Nachos ==="
-./nachos -q -cp test/big big
-# Files: big
-echo "=== copies file \"small\" from UNIX to Nachos ==="
-./nachos -q -cp test/small small
-# Files: big, small
-echo "=== lists the contents of the Nachos directory ==="
-./nachos -q -l
-# big
-# small
-echo "=== remove the file \"big\" from Nachos ==="
-./nachos -q -r big
-echo "=== print the content of file \"small\" ==="
-./nachos -q -p small
-echo "=== prints the contents of the entire file system ==="
-./nachos -q -D
-echo "=== tests the performance of the Nachos file system ==="
-./nachos -q -t
-```
-
 ## 一、文件系统的基本操作
 
 ### Exercise 1 源代码阅读
@@ -378,6 +347,28 @@ Visited: KSt10moneypunctIcLb1EE13negative_signEvFileHeader
 
 将时间类的变量用`time_t (sizeof(time_t) = 4)`来存储，然后调用`timeToString()`函数进行转换。文件名还是要用char[]来存储，文件名最大长度可以通过修改FileNameMaxLen宏，考虑到nachos磁盘空间实在有些小，我暂时将其修改为20，如果以后有需要，再修改。
 
+```cpp
+//lab4 exercise2
+private:
+  time_t lastVisitedTime;
+  time_t lastModifiedTime;
+  time_t createTime;
+  char *path;
+  FileType fileType;
+  int inodeSector; //openfile析构时需要保存信息
+  char *TimeToString(time_t t);
+
+// time_t到可读的时间串转换
+char *FileHeader::TimeToString(time_t t)
+{
+    struct tm *timeinfo;
+    timeinfo = localtime(&t);
+    return asctime(timeinfo);
+}
+```
+
+
+
 ### Exercise 3 扩展文件长度
 
 > 改直接索引为间接索引，以突破文件长度不能超过4KB的限制。
@@ -393,20 +384,21 @@ Nachos的磁盘大小块数为32\*32 = 1024块（`code/machine/disk.h`)，直接
 新增宏定义如下：
 
 ```cpp
-#define SECPERIND 32                     //每一个间接索引可以表示的物理块数
-#define NUMDIRECT 22                     //直接索引表示的最大块数
-#define NUMFIRST (NUMDIRECT + SECPERIND) //一级索引表达的最大块数
+#define SECPERIND 32                      //每一个间接索引可以表示的物理块数，sectors per indirect
+#define NUMDIRECT 22                      //直接索引表示的最大块数
+#define NUMSINGLE (NUMDIRECT + SECPERIND) //一级索引表达的最大块数
+#define SINGLEINDEX NUMDIRECT             //一级索引下标
+#define DOUBLEINDEX (SINGLEINDEX + 1)     //二级索引下标
 ```
 
 ```cpp
 bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 {
-    numBytes = fileSize;
     numSectors = divRoundUp(fileSize, SectorSize);
+    numBytes = numSectors * SectorSize;
     ASSERT(freeMap->NumClear() >= numSectors);
     int i = 0, ii = 0, iii = 0; //direct/single/double indxing
-    
-  	//direct indexing
+    //direct indexing
     for (; i < numSectors && i < NUMDIRECT; i++)
         if ((dataSectors[i] = freeMap->Find()) == -1)
             return FALSE;
@@ -443,6 +435,7 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
         synchDisk->WriteSector(dataSectors[DOUBLEINDEX], (char *)doubleBuffer);
     }
 
+    DEBUG('f', "===========succesfs allocate %d sectors.=============\n", numSectors);
     //lab4 exercise2
     SetCreateTime();
     SetLastModifiedTime();
@@ -451,7 +444,7 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 }
 ```
 
-而deAllocate为Allocate的逆向操作，这里不再赘述。
+而DeAllocate为Allocate的逆向操作，这里不再赘述。
 
 #### ByteToSector()
 
@@ -462,25 +455,27 @@ int FileHeader::ByteToSector(int offset)
 {
     int secNum = offset / SectorSize;
     if (secNum < NUMDIRECT) //直接索引
+    {
         return dataSectors[secNum];
-    else if (secNum < NUMFIRST) //一级索引
+    }
+    else if (secNum < NUMSINGLE) //一级索引
     {
         int buffer[SECPERIND];
         synchDisk->ReadSector(dataSectors[NUMDIRECT], (char *)buffer);
-        return buffer[secNum - NumDirect];
+        return buffer[secNum - NUMDIRECT];
     }
     else //二级索引
     {
-        int secBuffer[SECPERIND], firBuffer[SECPERIND];
-        synchDisk->ReadSector(dataSectors[NUMDIRECT + 1], (char *)secBuffer);
-        const int index = (secNum - NUMFIRST) / SECPERIND, offset = (secNum - NUMFIRST) % SECPERIND;
-        synchDisk->ReadSector(secBuffer[index], (char *)firBuffer);
-        return firBuffer[offset];
+        int doubleBuffer[SECPERIND], singleBuffer[SECPERIND];
+        synchDisk->ReadSector(dataSectors[NUMDIRECT + 1], (char *)doubleBuffer);
+        const int index = (secNum - NUMSINGLE) / SECPERIND, offset = (secNum - NUMSINGLE) % SECPERIND;
+        synchDisk->ReadSector(doubleBuffer[index], (char *)singleBuffer);
+        return singleBuffer[offset];
     }
 }
 ```
 
-关于其他代码的改动(deAllocate(), print(), etc.)，请查看`code/filesys/filehdr.cc`;
+关于其他代码的改动(DeAllocate(), print(), etc.)，请查看`code/filesys/filehdr.cc`;
 
 #### 测试
 
@@ -617,9 +612,11 @@ Directory contents:
 
 #### 结论
 
-结果显示，系统为123K的大文件分配了1022块磁盘，证明Allocate()实现正确。在删除大文件之后，bitmap恢复到之前的状态，证明deAllocate实现正确。
+结果显示，系统为123K的大文件分配了1022块磁盘，证明Allocate()实现正确。在删除大文件之后，bitM
 
-结论：成功实现二级间接索引，并且能够表示Nachos物理磁盘的最大容量。
+ap恢复到之前的状态，证明DeAllocate()实现正确。
+
+结论：成功实现多级索引（最高二级），并且能够表示Nachos物理磁盘的最大容量。
 
 ### Exercise 4 实现多级目录
 
@@ -1016,7 +1013,7 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 
 #### 测试
 
-在实现shell之后进行。
+在实现shell之后进行。由于尚未测试过正确性，所以这套代码我暂时放在filesys_pending文件夹下，后续实验用的还是Nachos的原始目录结构。
 
 #### 改进
 
@@ -1285,7 +1282,7 @@ void ConsoleTest(char *in, char *out)
 }
 ```
 
-然后加入一个Lock来实现条件一：
+然后加入一个Lock来实现同时只有一个线程访问：
 
 ```cpp
 class SynchConsole
@@ -1325,7 +1322,7 @@ SynchConsole::SynchConsole(char *readFile, char *writeFile)
     lock = new Lock("scLock");
     mutex_readAvail = new Semaphore("scmutex_r", 0);
     mutex_writeDone = new Semaphore("scmutex_w", 0);
-    console = new Console(readFile, writeFile, dummyReadAvail, dummyWriteDown, 0);
+    console = new Console(readFile, writeFile, dummyReadAvail, dummyWriteDown, (int)this);
 }
 
 SynchConsole::~SynchConsole()
@@ -1367,7 +1364,7 @@ void SynchConsole::WriteDone()
 
 #### 测试
 
-测试函数synchConsoleTest仿照consoleTest，均位于code/usrprog/progtest.cc中，并且在main.cc中添加触发条件 -sct,
+新增测试函数synchConsoleTest，与consoleTest流程一致，均位于code/usrprog/progtest.cc中，并且在main.cc中添加触发条件 -sct,
 
 ```cpp
 void SynchConsoleTest(char *in, char *out)
@@ -1398,7 +1395,7 @@ wodemuqMachine halting!
 
 #### 结论
 
-结果显示，在单线程下同步控制台能够正常工作，还没有测试多线程下的正确性，等实现了shell再测试（todo）。
+结果显示，在单线程下同步控制台能够正常工作，还没有测试多线程下的正确性(todo）。
 
 ### Exercise 7 实现文件系统的同步互斥访问机制，达到如下效果：
 
@@ -1430,6 +1427,10 @@ SynchDisk::SynchDisk(char *name)
 {
     for (int i = 0; i < NumSectors; ++i)
         rwLock[i] = new RWLock("synRWLock");//初始化
+}
+SynchDisk::~SynchDisk(char *name)
+{
+    delete[] rwlock;//析构
 }
 ```
 
@@ -1476,14 +1477,12 @@ OpenFile::~OpenFile()
 }
 ```
 
-最后修改code/filesys/filesys.cc中的remove，当某个文件中还有其他线程时，则无法删除：
+最后修改`code/filesys/filesys.cc`中的`Remove()`，当某个文件中还有其他线程时，则无法删除：
 
 ```cpp
 if(synchDisk->thraedsPerFile[sector])
     return FALSE;
 ```
-
-#### 测试
 
 ## 三、Challenges （至少选做1个）
 

@@ -214,8 +214,6 @@ void WriteFile(int fd, char *buffer, int nBytes)
 void Lseek(int fd, int offset, int whence)
 {
     int retVal = lseek(fd, offset, whence);
-    if(retVal < 0)
-    cout << retVal << endl; 
     ASSERT(retVal >= 0);
 }
 

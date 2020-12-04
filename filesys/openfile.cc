@@ -156,13 +156,9 @@ int OpenFile::WriteAt(char *from, int numBytes, int position)
     // synchDisk->rwLock[hdr->GetInodeSector()]->WriterAcquire();
 
     int fileLength = hdr->FileLength();
-
-    // printf("in openfile writeat, get numSetors:%d.\n",fileSectors);
-    // DEBUG('f',"fileLength :%d\n",fileLength);
     // lab4 exercise5
     if (numBytes + position > fileLength)
     {
-        // cout << "condition matched.expanding fileSize."<<endl;
         BitMap *freeMap = new BitMap(NumSectors);
         OpenFile *mapFile = new OpenFile(0);
         freeMap->FetchFrom(mapFile);
@@ -188,8 +184,8 @@ int OpenFile::WriteAt(char *from, int numBytes, int position)
         return 0; // check request
     if ((position + numBytes) > fileLength)
         numBytes = fileLength - position;
-    // DEBUG('f', "Writing %d bytes at %d, from file of length %d.\n",//暫時注釋
-    //   numBytes, position, fileLength);
+    DEBUG('f', "Writing %d bytes at %d, from file of length %d.\n", //暫時注釋
+          numBytes, position, fileLength);
 
     firstSector = divRoundDown(position, SectorSize);
     lastSector = divRoundDown(position + numBytes - 1, SectorSize);

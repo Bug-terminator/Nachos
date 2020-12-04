@@ -53,3 +53,4 @@ class SynchDisk {
 };
 
 #endif // SYNCHDISK_H
+

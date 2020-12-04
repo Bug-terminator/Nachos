@@ -25,11 +25,11 @@
 #define MaxFileSize (NumDirect * SectorSize)
 #define TIMELENGTH 24
 //lab4 exercise3
-#define SECPERIND 32                     //每一个间接索引可以表示的物理块数，sectors per indirect
-#define NUMDIRECT 22                     //直接索引表示的最大块数
+#define SECPERIND 32                      //每一个间接索引可以表示的物理块数，sectors per indirect
+#define NUMDIRECT 22                      //直接索引表示的最大块数
 #define NUMSINGLE (NUMDIRECT + SECPERIND) //一级索引表达的最大块数
-#define SINGLEINDEX NUMDIRECT            //一级索引下标
-#define DOUBLEINDEX (SINGLEINDEX + 1)    //二级索引下标
+#define SINGLEINDEX NUMDIRECT             //一级索引下标
+#define DOUBLEINDEX (SINGLEINDEX + 1)     //二级索引下标
 typedef enum
 {
   NORM,
