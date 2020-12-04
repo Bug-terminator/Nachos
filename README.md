@@ -11,8 +11,8 @@ PKU OS course project and notes based on Nachos
 
 | Lab   | Subject                                                      | Detail                                                     |
 | :---- | :----------------------------------------------------------- | :--------------------------------------------------------- |
-| Lab 1 | [Thread Mechanism&Scheduling](labs\LAB1 线程机制和线程调度实现.md) | Multi-thread management and scheduling                     |
-| Lab 3 | [Synchronization Mechanism](labs\lab3 同步机制.md)           | Concurrency, mutex lock and semaphore                      |
-| Lab 4 | [Virtual Memory](labs\lab2 虚拟内存.md)                      | TLB, demand paging, replacement algorithm and user program |
-| Lab 5 | [File System](labs\Lab4 文件系统.md)                         | Improve current file system                                |
-| Lab 6 | [System Call](labs\Lab5 系统调用.md)                         | Implement all system calls                                 |
+| Lab 1 | [Thread Mechanism&Scheduling](labs\Lab1.md) | Multi-thread management and scheduling                     |
+| Lab 2 | [Synchronization Mechanism](labs\Lab3.md)           | Concurrency, mutex lock and semaphore                      |
+| Lab 3 | [Virtual Memory](labs\Lab2.md)                      | TLB, demand paging, replacement algorithm and user program |
+| Lab 4 | [File System](labs\Lab4.md)                         | Improve current file system                                |
+| Lab 5 | [System Call](labs\Lab5.md)                         | Implement all system calls                                 |
