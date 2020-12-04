@@ -36,11 +36,8 @@
 //
 //	"freeMap" is the bit map of free disk sectors
 //	"fileSize" is the bit map of free disk sectors
-//  lab4 突破文件长度限制
-//  根据文件长度分配内存需
-//  要分为两步：先分配直接
-//  索引，再分配一级索引,
-//  最后分配二级索引。
+//  lab4 突破文件长度限制  根据文件长度分配内存需  要分为两步：先分配直接  
+//  索引，再分配一级索引, 最后分配二级索引。
 //----------------------------------------------------------------------
 bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 {

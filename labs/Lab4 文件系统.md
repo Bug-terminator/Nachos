@@ -1,7 +1,5 @@
 # Lab4 文件系统
 
-todo:makedep
-
 > 【实习建议】
 >
 > 1. 数据结构的修改和维护
@@ -345,7 +343,11 @@ Visited: KSt10moneypunctIcLb1EE13negative_signEvFileHeader
 
 #### 重新扩展文件属性
 
-将时间类的变量用`time_t (sizeof(time_t) = 4)`来存储，然后调用`timeToString()`函数进行转换。文件名还是要用char[]来存储，文件名最大长度可以通过修改FileNameMaxLen宏，考虑到nachos磁盘空间实在有些小，我暂时将其修改为20，如果以后有需要，再修改。
+在一番思考之后，我决定将将时间变量用`time_t`来存储，然后调用`timeToString()`函数进行转换，这样占的存储空间依然很小（sizeof(time_t) = 4)。
+
+然而，文件名要用char[]来存储，原因就是char*指向的内存有被覆盖的风险。文件名最大长度可以通过修改FileNameMaxLen宏，考虑到nachos磁盘空间实在有些小，我暂时将其修改为20，如果以后有需要，再扩展。
+
+另外path是一个多余的变量，如果要实现path的话，也要用char[]数组来存储，这样会占大量的空间。可以参考Linux中pwd的实现：在目录中加入“./”和“../“，利用后序遍历的思想(自底向上)，递归地从上往下打印出当前路径。
 
 ```cpp
 //lab4 exercise2
@@ -353,7 +355,7 @@ private:
   time_t lastVisitedTime;
   time_t lastModifiedTime;
   time_t createTime;
-  char *path;
+  char *path;//之后可能会删除
   FileType fileType;
   int inodeSector; //openfile析构时需要保存信息
   char *TimeToString(time_t t);
@@ -366,8 +368,6 @@ char *FileHeader::TimeToString(time_t t)
     return asctime(timeinfo);
 }
 ```
-
-
 
 ### Exercise 3 扩展文件长度
 
@@ -475,17 +475,17 @@ int FileHeader::ByteToSector(int offset)
 }
 ```
 
-关于其他代码的改动(DeAllocate(), print(), etc.)，请查看`code/filesys/filehdr.cc`;
+关于其他代码的改动(DeAllocate(), Print(), etc.)，请查看`code/filesys/filehdr.cc`;
 
 #### 测试
 
-> 这里我引用了github一位学长的测试脚本，位于`code\filesys\test\exercise3_large_file_test.sh`中，该脚本文件的作用为
+> 这里我引用了github一位学长的测试脚本，位于`code\filesys\test\_large_file_test.sh`中，该脚本文件的作用为
 >
 > 产生一个大文件，复制进nachos，然后删除该文件。我们可以通过该脚本测试我们程序的正确性。
 >
 > [Source--github](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
 
-本次测试产生了一个Nachos物理内存(总共128KB）范围内理论上能够容纳的最大的文件(123KB)，如果脚本运行成功，那么可以证明我们的间接索引实现成功。在terminal中输入`test/exercise3_large_file_test.sh`可查看结果：
+本次测试产生了一个Nachos物理内存(总共128KB）范围内理论上能够容纳的最大的文件(123KB)，如果脚本运行成功，那么可以证明我们的间接索引实现成功。在terminal中输入`test/large_file_test.sh`可查看结果：
 
 ```shell
 vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ test/exercise3_large_file_test.sh
@@ -612,9 +612,7 @@ Directory contents:
 
 #### 结论
 
-结果显示，系统为123K的大文件分配了1022块磁盘，证明Allocate()实现正确。在删除大文件之后，bitM
-
-ap恢复到之前的状态，证明DeAllocate()实现正确。
+结果显示，系统为123K的大文件分配了1022块磁盘，证明Allocate()实现正确。在删除大文件之后，bitMap恢复到之前的状态，证明DeAllocate()实现正确。全程没有出错，证明ByteToSector()实现正确，因为整个过程都会调用writeAt和readAt来对文件进行读写，而这二者都会调用ByteToSector()。
 
 结论：成功实现多级索引（最高二级），并且能够表示Nachos物理磁盘的最大容量。
 
@@ -1019,6 +1017,10 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 
 当前的Remove()只能对文件本身进行删除，如果我们想删除/var/log/rpmpkgs下的log，我们能先删除rpmpkgs，再删除log。所以我们应该对此进行改进，使得可以递归地删除log和它的所有子文件夹(todo)。
 
+增加./和../（todo）
+
+将Nachos目录数组改为动态数组，突破目录项限制（todo）
+
 ### Exercise 5 动态调整文件长度
 
 > 对文件的创建操作和写入操作进行适当修改，以使其符合实习要求。 
@@ -1204,7 +1206,7 @@ Network I/O: packets received 0, sent 0
 
 #### 结论
 
-结果显示：在测试文件为50000B的情况下，初始化一个size为0的文件，每次写入十个字符，每当文件大小不足时，动态扩展一个sector，直到分配到391块时(391*128 = 50048)，结束，此时整个文件完成写入。并顺利执行文件读测试(没有报错`Perf test: unable to read TestFile`就证明读成功了），结论：实验结果正确。
+结果显示：在测试文件为50000B的情况下，程序先初始化一个size为0的文件，每次写入十个字符，每当文件大小不足时，动态扩展一个sector，直到扩展到391块时(391*128 = 50048)，结束，此时整个文件完成写入。并顺利执行文件读测试(没有报错`Perf test: unable to read TestFile`就证明读成功了），结论：实验结果正确。
 
 ## **二、文件访问的同步与互斥**
 
@@ -1498,7 +1500,7 @@ if(synchDisk->thraedsPerFile[sector])
 
 ## 困难&解决
 
-## segmentation fault
+### segmentation fault
 
 突破文件名长度限制：将文件名从char[]改为char*，之后会报错segmentation fault，这是因为fileHeader中使用了strncmp()函数和strncpy()函数，需要将它们分别改为strcmp和table[i].name = name。
 
@@ -1506,7 +1508,7 @@ if(synchDisk->thraedsPerFile[sector])
 >
 >不过最终我还是采用了char[]来存储文件名，原因在之前exercise2中的**反思**有说过。
 
-## 160 - 54 = 170?
+### 160 - 54 = 170?
 
 在exercise3 debug的时候我写了如下代码：
 
@@ -1527,7 +1529,7 @@ numSectors = 160, NUMFIRST = 54, numSectors - NUMFIRST = 170,numSectors = 160, N
 #define NUMFIRST (NUMDIRECT + SECPERIND)//正确
 ```
 
-## Assertion failed: line 123, file "../machine/disk.cc"
+### Assertion failed: line 123, file "../machine/disk.cc"
 
 在exercise3中将大文件copy进nachos会报错。
 
@@ -1580,7 +1582,7 @@ Bit map file header:
 
 没有再报错了，其他与exercise3中的结果一致。
 
-## Perf test: unable to write TestFile
+### Perf test: unable to write TestFile
 
 在做exercise5的时候，每次执行`./Nachos -d f -t`都会报错`Perf test: unable to write TestFile`,审查源代码：
 
@@ -1639,4 +1641,12 @@ bool FileHeader::expandFile(BitMap *freeMap, int extraBytes)
 ```
 
 即将numBytes的定义改为当前文件的最大容量(B)，成功解决bug。
+
+## 参考文献：
+
+《Nachos中文教程》
+
+[Lab5 文件系统--github](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
+
+[nachos Lab5实习报告](https://wenku.baidu.com/view/04382358f6ec4afe04a1b0717fd5360cbb1a8d40.html?re=view)
 
