@@ -1,56 +1,22 @@
 # LAB1 线程机制和线程调度实现
 
+## 任务完成情况
+
+|               任务               | Y/N  |
+| :------------------------------: | :--: |
+|          调研Linux的PCB          |  Y   |
+|       Exercise1 源代码阅读       |  Y   |
+|   Exercise2 扩展线程的数据结构   |  Y   |
+|  Exercise3 增加全局线程管理机制  |  Y   |
+|       Exercise4 源代码阅读       |  Y   |
+| Exercise5 实现优先级抢占调度算法 |  Y   |
+|   *Chalenge 实现时间片轮转算法   |  Y   |
+
+
+
 ## 调研Linux的进程控制块
 
-Linux的线程管理通过task_struct结构体完成，它包含了一个进程所需的所有信息，如打开文件/进程状态/地址空间等。它定义在include/linux/sched.h头文件中。
-
-### 进程状态
-
-```cpp
-  volatile long state;    /* -1 unrunnable, 0 runnable, >0 stopped */
-```
-
-state成员变量的取值范围如下：
-
-```cpp
-/*
-  * Task state bitmask. NOTE! These bits are also
-  * encoded in fs/proc/array.c: get_task_state().
-  *
-  * We have two separate sets of flags: task->state
-  * is about runnability, while task->exit_state are
-  * about the task exiting. Confusing, but this way
-  * modifying one set can't modify the other one by
-  * mistake.
-  */
-#define TASK_RUNNING 0
-#define TASK_INTERRUPTIBLE 1
-#define TASK_UNINTERRUPTIBLE 2
-#define __TASK_STOPPED 4
-#define __TASK_TRACED 8
-
-/* in tsk->exit_state */
-#define EXIT_DEAD 16
-#define EXIT_ZOMBIE 32
-#define EXIT_TRACE (EXIT_ZOMBIE | EXIT_DEAD)
-
-/* in tsk->state again */
-#define TASK_DEAD 64
-#define TASK_WAKEKILL 128 /** wake on signals that are deadly **/
-#define TASK_WAKING 256
-#define TASK_PARKED 512
-#define TASK_NOLOAD 1024
-#define TASK_STATE_MAX 2048
-
-/* Convenience macros for the sake of set_task_state */
-#define TASK_KILLABLE (TASK_WAKEKILL | TASK_UNINTERRUPTIBLE)
-#define TASK_STOPPED (TASK_WAKEKILL | __TASK_STOPPED)
-#define TASK_TRACED (TASK_WAKEKILL | __TASK_TRACED)
-```
-
 ### 五个互斥状态
-
-state的取值只能是这五个状态之一，state不可能同时处于五个状态中的任意两个。
 
 |         状态         |                             描述                             |
 | :------------------: | :----------------------------------------------------------: |
@@ -62,185 +28,16 @@ state的取值只能是这五个状态之一，state不可能同时处于五个�
 
 ### 两个终止状态
 
-有两个状态既可以被state使用，也可以被exit_exit使用
-
-```cpp
-/* task state */
-int exit_state;
-int exit_code, exit_signal;
-```
-
 |    状态     |                             描述                             |
 | :---------: | :----------------------------------------------------------: |
 | EXIT_ZOMBIE | 僵尸进程是当子进程比父进程先结束，而父进程又没有回收子进程，释放子进程占用的资源，此时子进程将成为一个僵尸进程。如果父进退出 ，子进程被init接管，子进程退出后init会回收其占用的相关资源，但如果父进程不退出，子进程所占有的进程ID将不会被释放，如果系统中僵尸进程过多，会占用大量的PID，导致PID不足，这是僵尸进程的危害，应当避免 |
 |  EXIT_DEAD  |                    进程正常结束的最终状态                    |
 
-### 进程的转换过程如下图
+### 进程的转换过程
 
-![](C:\Users\litang\OneDrive\图片\Saved Pictures\进程状态转换.png)
+![image-20201026222731898](LAB1 线程机制和线程调度实现.assets/image-20201026222731898.png)
 
-### 进程标识符PID
-
-```cpp
-pid_t pid;  
-pid_t tgid;  
-```
-
-unix通过pid来唯一地标识进程，Linux希望pid与线程相关联，同时希望同一组线程拥有相同的pid，所以Linux引入了tgid（线程组）的概念。只有领头线程的pid成员变量会被赋值，其他线程的pid成员不会被赋值，所以getpid()方法返回的是线程的tgid值，这点值得注意。
-
-### 进程内核栈
-
-```cpp
-void *stack;  
-```
-
-#### 内核栈与线程描述符
-
-对每个进程，Linux内核都把两个不同的数据结构紧凑的存放在一个单独为进程分配的内存区域中
-
-- 一个是内核态的进程堆栈，
-- 另一个是紧挨着进程描述符的小数据结构thread_info，叫做线程描述符。
-
-Linux把thread_info（线程描述符）和内核态的线程堆栈存放在一起，这块区域通常是8192K（占两个页框），其实地址必须是8192的整数倍。
-
-在linux/arch/x86/include/asm/page_32_types.h中
-
-```cpp
-#define THREAD_SIZE_ORDER    1
-#define THREAD_SIZE        (PAGE_SIZE << THREAD_SIZE_ORDER)
-```
-
-> 需要注意的是，**内核态堆栈**仅用于内核例程，Linux内核另外为中断提供了单独的**硬中断栈**和**软中断栈**
-
-下图中显示了在物理内存中存放两种数据结构的方式。线程描述符驻留与这个内存区的开始，而栈顶末端向下增长。 下图摘自ULK3,进程内核栈与进程描述符的关系如下图：
-
-![](C:\Users\litang\OneDrive\图片\Saved Pictures\20160512131035840.png)
-
-在这个图中，esp寄存器是CPU栈指针，用来存放栈顶单元的地址。在80x86系统中，栈起始于顶端，并朝着这个内存区开始的方向增长。从用户态刚切换到内核态以后，进程的内核栈总是空的。因此，esp寄存器指向这个栈的顶端。一旦数据写入堆栈，esp的值就递减。
-
-### 内核栈数据结构描述thread_info和thread_union
-
-Linux内核中使用一个联合体来表示一个进程的线程描述符和内核栈：
-
-```cpp
-union thread_union
-{
-    struct thread_info thread_info;
-    unsigned long stack[THREAD_SIZE/sizeof(long)];
-};
-```
-
-### 进程标记
-
-```cpp
-unsigned int flags; /* per process flags, defined below */  
-```
-
-反应进程状态的信息，但不是运行状态，用于内核识别进程当前的状态，以备下一步操作
-
-flags成员的可能取值如下，这些宏以PF(ProcessFlag)开头
-
-```cpp
- /*
-* Per process flags
-*/
-#define PF_EXITING      0x00000004      /* getting shut down */
-#define PF_EXITPIDONE   0x00000008      /* pi exit done on shut down */
-#define PF_VCPU         0x00000010      /* I'm a virtual CPU */
-#define PF_WQ_WORKER    0x00000020      /* I'm a workqueue worker */
-#define PF_FORKNOEXEC   0x00000040      /* forked but didn't exec */
-#define PF_MCE_PROCESS  0x00000080      /* process policy on mce errors */
-#define PF_SUPERPRIV    0x00000100      /* used super-user privileges */
-#define PF_DUMPCORE     0x00000200      /* dumped core */
-#define PF_SIGNALED     0x00000400      /* killed by a signal */
-#define PF_MEMALLOC     0x00000800      /* Allocating memory */
-#define PF_NPROC_EXCEEDED 0x00001000    /* set_user noticed that RLIMIT_NPROC was exceeded */
-#define PF_USED_MATH    0x00002000      /* if unset the fpu must be initialized before use */
-#define PF_USED_ASYNC   0x00004000      /* used async_schedule*(), used by module init */
-#define PF_NOFREEZE     0x00008000      /* this thread should not be frozen */
-#define PF_FROZEN       0x00010000      /* frozen for system suspend */
-#define PF_FSTRANS      0x00020000      /* inside a filesystem transaction */
-#define PF_KSWAPD       0x00040000      /* I am kswapd */
-#define PF_MEMALLOC_NOIO 0x00080000     /* Allocating memory without IO involved */
-#define PF_LESS_THROTTLE 0x00100000     /* Throttle me less: I clean memory */
-#define PF_KTHREAD      0x00200000      /* I am a kernel thread */
-#define PF_RANDOMIZE    0x00400000      /* randomize virtual address space */
-#define PF_SWAPWRITE    0x00800000      /* Allowed to write to swap */
-#define PF_NO_SETAFFINITY 0x04000000    /* Userland is not allowed to meddle with cpus_allowed */
-#define PF_MCE_EARLY    0x08000000      /* Early kill for mce process policy */
-#define PF_MUTEX_TESTER 0x20000000      /* Thread belongs to the rt mutex tester */
-#define PF_FREEZER_SKIP 0x40000000      /* Freezer should not count it as freezable */
-#define PF_SUSPEND_TASK 0x80000000      /* this thread called freeze_processes and should not be frozen */
-```
-
-### 表示进程亲属关系的成员
-
-```cpp
-/*
- * pointers to (original) parent process, youngest child, younger sibling,
- * older sibling, respectively.  (p->father can be replaced with
- * p->real_parent->pid)
- */
-struct task_struct __rcu *real_parent; /* real parent process */
-struct task_struct __rcu *parent; /* recipient of SIGCHLD, wait4() reports */
-/*
- * children/sibling forms the list of my natural children
- */
-struct list_head children;      /* list of my children */
-struct list_head sibling;       /* linkage in my parent's children list */
-struct task_struct *group_leader;       /* threadgroup leader */
-```
-
-|     字段     |                             描述                             |
-| :----------: | :----------------------------------------------------------: |
-| real_parent  | 指向其父进程，如果创建它的父进程不再存在，则指向PID为1的init进程 |
-|    parent    | 指向其父进程，当它终止时，必须向它的父进程发送信号。它的值通常与real_parent相同 |
-|   children   |        表示链表的头部，链表中的所有元素都是它的子进程        |
-|   sibling    |                用于把当前进程插入到兄弟链表中                |
-| group_leader |                  指向其所在进程组的领头进程                  |
-
-### 进程调度
-
-#### 优先级
-
-```cpp
-int prio, static_prio, normal_prio;
-unsigned int rt_priority;
-```
-
-|    字段     |                        描述                        |
-| :---------: | :------------------------------------------------: |
-| static_prio | 用于保存静态优先级，可以通过nice系统调用来进行修改 |
-| rt_priority |                 用于保存实时优先级                 |
-| normal_prio |            值取决于静态优先级和调度策略            |
-|    prio     |                 用于保存动态优先级                 |
-
-实时优先级范围是0到MAX_RT_PRIO-1（即99），而普通进程的静态优先级范围是从MAX_RT_PRIO到MAX_PRIO-1（即100到139）。值越大静态优先级越低。
-
-```cpp
-/*  http://lxr.free-electrons.com/source/include/linux/sched/prio.h#L21  */
-#define MAX_USER_RT_PRIO    100
-#define MAX_RT_PRIO     MAX_USER_RT_PRIO
-
-/* http://lxr.free-electrons.com/source/include/linux/sched/prio.h#L24  */
-#define MAX_PRIO        (MAX_RT_PRIO + 40)
-#define DEFAULT_PRIO        (MAX_RT_PRIO + 20)
-```
-
-#### 调度策略
-
-```cpp
-/*
-* Scheduling policies
-*/
-#define SCHED_NORMAL            0
-#define SCHED_FIFO              1
-#define SCHED_RR                2
-#define SCHED_BATCH             3
-/* SCHED_ISO: reserved but not implemented yet */
-#define SCHED_IDLE              5
-#define SCHED_DEADLINE          6
-```
+### 调度策略
 
 |                |                                                              |              |
 | :------------: | :----------------------------------------------------------: | :----------: |
@@ -252,58 +49,36 @@ unsigned int rt_priority;
 |    SCHED_RR    | 轮流调度算法（实时调度策略），后者提供 Roound-Robin 语义，采用时间片，相同优先级的任务当用完时间片会被放到队列尾部，以保证公平性，同样，高优先级的任务可以抢占低优先级的任务。不同要求的实时任务可以根据需要用sched_setscheduler()API 设置策略 |      RT      |
 | SCHED_DEADLINE | 新支持的实时进程调度策略，针对突发型计算，且对延迟和完成时间高度敏感的任务适用。基于Earliest Deadline First (EDF) 调度算法 |              |
 
-#### 进程地址空间
-
-```cpp
-/*  http://lxr.free-electrons.com/source/include/linux/sched.h?V=4.5#L1453 */
-struct mm_struct *mm, *active_mm;
-/* per-thread vma caching */
-u32 vmacache_seqnum;
-struct vm_area_struct *vmacache[VMACACHE_SIZE];
-#if defined(SPLIT_RSS_COUNTING)
-struct task_rss_stat    rss_stat;
-#endif
-
-/*  http://lxr.free-electrons.com/source/include/linux/sched.h?V=4.5#L1484  */
-#ifdef CONFIG_COMPAT_BRK
-unsigned brk_randomized:1;
-#endif
-```
-
-| 字段           | 描述                                                         |
-| -------------- | ------------------------------------------------------------ |
-| mm             | 进程所拥有的用户空间内存描述符，内核线程无的mm为NULL         |
-| active_mm      | active_mm指向进程运行时所使用的内存描述符， 对于普通进程而言，这两个指针变量的值相同。但是内核线程kernel thread是没有进程地址空间的，所以内核线程的tsk->mm域是空（NULL）。但是内核必须知道用户空间包含了什么，因此它的active_mm成员被初始化为前一个运行进程的active_mm值。 |
-| brk_randomized | 用来确定对随机堆内存的探测。参见[LKML](http://lkml.indiana.edu/hypermail/linux/kernel/1104.1/00196.html)上的介绍 |
-| rss_stat       | 用来记录缓冲信息                                             |
-
-> **因此如果当前内核线程被调度之前运行的也是另外一个内核线程时候，那么其mm和avtive_mm都是NULL**
+> [以上内容参考：Linux进程描述符task_struct结构体详解--Linux进程的管理与调度（一）](https://blog.csdn.net/gatieme/article/details/51383272)
 
 ### Linux与Nachos的异同
 
-#### Linux中的PCB包含以下的内容
+#### Linux中的task_struct
 
-1. PID
-2. 特征信息
-3. 进程状态
-4. 优先级
-5. 通信状态
-6. 现场保护区
-7. 资源需求、分配控制信息
-8. 进程实体信息
-9. 其他（工作单位、工作区、文件信息）
+|                PID                 |
+| :--------------------------------: |
+|    特征信息(name, tID, tgID等)     |
+|              进程状态              |
+|               优先级               |
+|              通信状态              |
+|             现场保护区             |
+|       资源需求、分配控制信息       |
+|            进程实体信息            |
+| 其他（工作单位、工作区、文件信息） |
 
 #### Nachos中的PCB实现
 
-PCB的实现`thread.h`中，其中仅包含以下信息：
-
-1. stackTop and stack, 表示当前进程所占的栈顶和栈底
-2. machineState， 保留未在CPU上运行的进程的寄存器状态
-3. status， 表示当前进程的状态
+|   成员变量   |    描述    |
+| :----------: | :--------: |
+|     name     |  进程名字  |
+|    status    |  进程状态  |
+| machineState | 寄存器状态 |
+|   stackTop   |    栈顶    |
+|    stack     |    栈底    |
 
 #### 异同
 
-Nachos是一个羽量级的Linux，很多功能待完善。
+Nachos是一个羽量级的Linux（这么说是不严谨的，因为Nachos很多接口和Linux不同，典型例子--Fork())，Nachos很多功能待完善。
 
 ## Exercise1 源代码阅读
 
@@ -370,9 +145,9 @@ Nachos是一个羽量级的Linux，很多功能待完善。
 
 ### 仿照Linux中PS命令，增加一个功能TS(Threads Status)，能够显示当前系统中所有线程的信息和状态
 
-#### 题意
+#### 算法思想
 
-题目的要求是在terminal中输入`./nacos -TS`能够打印出线程的信息，为了实现这一功能，应该在main.cc中增加一个"-TS"的判断。如果用户输入了`./nacos -TS`那么调用TS()方法。
+题目的要求是在terminal中输入`./nacos -TS`能够打印出线程的信息，为了实现这一功能，应该在shell中增加一个"-TS"的判断。如果用户输入了`./nacos -TS`那么调用TS()方法。但是鉴于现在的能力不足，暂时先用一个TS方法代替，等以后实现了shell之后再来实现这个功能。
 
 #### 定义Thread* threadPtr[128]
 
@@ -381,6 +156,22 @@ Nachos是一个羽量级的Linux，很多功能待完善。
 #### 定义TS()方法
 
 在`ThreadTest.cc`中定义`TS()`方法，遍历`isAllocatable`数组，每当遇到非零的元素时，通过`threadPtr`找到其对应的线程指针，屏幕打印其对应的`uID/tID/name/status`。
+
+### 成果演示
+
+我在threadTest.cc中new了130个线程，然后让它们交替执行两次，最后调用TS方法查看线程的信息，在terminal中输入`./nachos -q 2`后，执行结果如下：
+
+![image-20201022202220162](LAB1 线程机制和线程调度实现.assets/image-20201022202220162.png)
+
+![image-20201022202345120](LAB1 线程机制和线程调度实现.assets/image-20201022202345120.png)
+
+![image-20201022202421265](LAB1 线程机制和线程调度实现.assets/image-20201022202421265.png)
+
+![image-20201022202437430](LAB1 线程机制和线程调度实现.assets/image-20201022202437430.png)
+
+![image-20201022202725837](LAB1 线程机制和线程调度实现.assets/image-20201022202725837.png)
+
+![image-20201022202746496](LAB1 线程机制和线程调度实现.assets/image-20201022202746496.png)
 
 ## Exercise4 源代码阅读
 
@@ -402,62 +193,155 @@ Nachos是一个羽量级的Linux，很多功能待完善。
 |          randomize           |                  设置是否需要使用随机时间片                  |
 |           handler            |                      计时器中断处理程序                      |
 |             arg              |                   中断处理函数所需要的参数                   |
-|         Timer::Timer         | 初始化硬件计时器设备。保存要在每个中断上调用的位置，然后安排计时器开始生成中断。 |
-|    Timer::TimerExpired()     | 用于模拟硬件计时器设备生成的中断。安排下一个中断，并调用中断处理程序。 |
-| Timer::TimeOfNextInterrupt() | 返回下一次硬件计时器将引起中断的时间。 如果启用了随机化，则将其设置为（伪）随机延迟。 |
+|        Timer::Timer()        | 初始化一个Timer。包括时间中断处理函数及其参数，以及一个可选的随机时间片标记 |
+|    Timer::TimerExpired()     |           安排下一次中断的时间，并调用中断处理函数           |
+| Timer::TimeOfNextInterrupt() |                        返回时间片大小                        |
 
+在 Timer 的初始化函数中，借用 TimerHandler 成员函数而不直接用初始 化函数中的 timerHandler 参数作为中断处理函数的原因：如果直接使用 timerHandler 作为时钟中断处理函数，一旦中断时刻到来，立即进行中断处理，处理结束后来不及将下一个时钟中断插入到等待处理中断队列。 TimerHandler 内部函数正是处理这个问题。当时钟中断时刻到来时，调用 TimerHandler 函数， 其调用 TimerExpired 方法，该方法将新的时钟中断插入到等待处理中断队列中，然后再调用 真正的时钟中断处理函数。这样 Nachos 就可以定时的收到时钟中断。 
 
+那么为什么不将TimerExpired方法作为时钟中断在Timer的初始化函数中调用呢？这是由于 C++语言不能直接引用一个类成员方法的指针，所以借用 TimerHandler 内部函数。这也是 TimerExpired 必须设计成 public 的方法的原因，因为它要被 TimerHandler 调用。 
 
-## *Chalenge 实现时间片轮转算法
+> 参考资料：《Nachos中文手册》
 
-通过阅读stats.h发现可以通过totalTicks来控制线程的执行时间，也可以输出当前的系统时间，单位为ms，此外时间片间隔默认为100ms， 可以修改`TimerTicks`宏来自定义时间片。
+在nachos中已经实现了一个模拟计时器Timer，它的作用为：每隔一段时间会产生一次时间中断。需要注释掉system.cc里面的`if(ramdomyeild)`来初始化一个`Timer`，`interrupt.cc::scheduler()`方法表明系统会每隔一个时间片来安排一次时间中断，然后调用时间中断处理函数。	 具体的实现机理：系统初始化一个`Timer`，调用`Interrupt::Schedule`来创建一个名为`toOccur`的延迟中断对象，并将其插入中断队列中，表示在既定的延迟时间之后，会产生中断，并调用中断处理函数。在调用了中断处理函数之后，会将 `yieldOnReturn`标记设为true，表在中断处理函数结束之后会在OneTick()方法中执行进程切换。
 
-| 位置                                      | 新增变量/语句                                                | 描述                                                         |
-| ----------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| system.h/system.cc::TimerInterruptHandler | TimerInterruptHandler(int dummy){cout << currTime is << stats->totalTicks << endl;currentThread->Yeild();} | 时间中断处理函数，每当时间中断发生时，currentThread->Yeild(). |
-|                                           |                                                              |                                                              |
-|                                           |                                                              |                                                              |
-|                                           |                                                              |                                                              |
+### switch.s
+
+![image-20201026223508017](LAB1 线程机制和线程调度实现.assets/image-20201026223508017.png)
+
+> 图源：https://blog.csdn.net/ShiningStarPxx/article/details/7456840
+
+SWITCH函数 Nachos 中系统线程的切换是借助宿主机的正文切换。SWITCH 函数就是完成线程切换的功 能。SWITCH 的语法是这样的：  void SWITCH (Thread *t1, Thread *t2); 其中 t1 是原运行线程指针，t2 是需要切换到的线程指针。线程切换的三步曲是： 保存原线程上下文->恢复新线程的上下文->在新线程的栈空间继续运行。
+
+> 参考资料：《Nachos中文教程》
+
+## Exercise5 实现优先级抢占调度算法
+
+### 算法思想
+
+题目要求实现优先级抢占算法，顾名思义，当线程被创建时，应该与currentThread比较，如果优先级高于currentThread，应该剥夺，否则，按照优先级插入readyList。这些修改都应该写在Scheduler::ReadyToRun方法中。
+
+### 新增变量/语句
+
+|                 位置                  |                        新增变量/语句                         |                             描述                             |
+| :-----------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
+|               thread.h                |                             prio                             |              线程优先级（值越小代表优先级越高）              |
+| Scheduler::ReadyToRun(Thread *thread) | readyList->SortedInsert((void*) thread, thread->getPrio());  |                 先把thread按照优先级插入队列                 |
+| Scheduler::ReadyToRun(Thread *thread) | if (thread->getPrio() < currentThread->getPrio())   currentThread->Yield(); | 如果该线程的优先级高于正在运行的线程，直接抢占，否则什么也不做 |
 
 ### 成果演示
 
-我修改了simpleThread方法的内容：当系统时间小于3000ms时无限循环。在ThreadTest方法中new了十个线程，从main函数开始，逐个调用simpleThread方法，预期结果：每隔100ms会发生一次线程切换。
+我修改了`SimpleThread`的内容，将其改为如果`currentThread`的`priority>0`, 那么就会`fork`一个比它`priority`小1的线程，将main线程的优先级初始化为7，预期结果：`main`会`fork`一个优先级为6的线程，然后被该线程剥夺；然后该线程会`fork`一个优先级为5的线程，然后被这个优先级为5的线程剥夺，直到`fork`出一个优先级为0的线程。在`terminal`中输入`./nachos -q 3`可以查看结果。
+
+![image-20201023001919249](LAB1 线程机制和线程调度实现.assets/image-20201023001919249.png)
+
+## *Chalenge 实现时间片轮转算法
+
+### 算法思想
+
+在Thread类里新增timeSlice时间片成员变量，设为缺省值5，表示我们实现的是固定时间片的时间片轮转算法（如果要实现可变时间片，那么修改Thread的构造函数即可）。并且增设totalRunningTime成员变量，用来表示当前进程的总执行时间，设为缺省值10，表示每个进程都是10个单位时间执行完成（也可以自定义，这样更贴合实际中作业长短不一的情况）（虽然在实际中某进程的执行时间不可预计，但是在我们的测试中可以将某进程的总执行时间设为缺省值，因为我们的任务是检查时间片轮转是否生效）。
+
+可以修改`TimerTicks`宏来自定义时间片。将`TimerTicks`的大小设为1，这样就能实现每个单位时间都会产生中断，并且在中断处理函数中会让当前进程的时间片和总的运行时间都减少1，并且check一下当前进程的时间片是否已经用完，如果用完，那么就进行线程切换。每次中断之后，系统都会调用OneTick方法来让系统时间增加10，这是Nachos作者为了方便起见定义每次中断处理都会花费10的时间（若为用户指令，则为1）。
+
+### 新增语句
+
+|                位置                |                        新增变量/语句                         |                          描述                          |
+| :--------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------: |
+|              Thread.h              |                          timeSlice                           |                       线程时间片                       |
+|              Thread.h              |                       totalRunningTime                       |                    线程的总运行时间                    |
+| system.cc::TimerInterruptHandler() | currentThread->totalRunningTime--;currentThread->timeSlice--; |           当前线程的运行时间和时间片均自减1            |
+| system.cc::TimerInterruptHandler() | if (!currentThread->timeSlice){currentThread->timeSlice = 5;interrupt->YieldOnReturn();} | 若当前线程时间片用完，重新赋予时间片，并且进行线程切换 |
+
+### 成果演示
+
+我在测试函数中new了一个线程，加上main()线程，总共两个。他们的总运行时间都为10，时间片都是5。系统每隔一个单位时间会产生一次时钟中断来check当前线程的时间片是否用完。中断处理会花费10的单位时间，相当于每隔10的单位时间会check一次，每check一次，当前进程的运行时间就会+1，直到达到它的总运行时间为止，预期结果：每隔5的单位时间会发生一次线程切换（算上中断处理的时间是50），并且在两个线程的运行时间达到10时结束。在terminal中输入`./nachos -q 4`可查看结果：
+
+![image-20201030155210791](LAB1 线程机制和线程调度实现.assets/image-20201030155210791.png)
+
+## 困难&解决
+
+首先，必须声明的一点是，我的OS学习之路是坎坷且崎岖的。一个月前，为了搭建nachos的实验环境，且怀揣着对新鲜事物的好奇感，我花了三天时间特意学习了Docker，理解了docker的运行机制并成功地将Nachos封装成一个image，永久地保存在了DokcerHub上。这么做的意义在于：以后的同学都可以pull到本地，并且整个过程不超过5分钟，这将大大缩短同学们配置环境的时间。
+
+这次小小的成功的确给我带来的很大的成就感。可是好景不长，我发现在docker中编辑代码非常困难，因为只能用原生的vim，而我已经用习惯了vscode，并且确信它的效率不比vim差甚至可以说高于vim，所以我开始寻找一种可以在windows平台下编辑代码，然后在docker中编译的方法。
+
+功夫不负有心人，我发现一款叫做remote-containers的插件，它可以通过ssh连接远程的container，所有的开发都可以在windows平台下进行。“这简直就是为我量身定做的，感谢微软的开发者们！致敬！”安静的图书馆中一颗激动的心正汹涌澎湃着，“今天拿下！”
+
+于是我花了大量时间来搭建remote-containers。可是当我连接nachos的时候，一直报错“容器架构不支持！”然后我去查阅了官方文档，发现容器的Ubuntu版本至少需要16.04，而我的版本是14.04.“版本低了啊，那用一个16.04的重新配置一次nachos不就行了吗？”经历小小挫败的我并没有灰心，而是立刻投身DockerHub，下载i386/ubuntu 16.04(32bit)。“下载成功！”
+
+- `sudo apt-get install gcc-5 g++-5` 
+
+- "can not locate gcc-5!"
+
+为了解决这个问题，我把google上能搜到的安装低版本gcc的方法试了个遍，无果。这时候一整天已经过去了。”我一整天啥也没干，真是个废物。“
+
+”我讨厌浪费时间，环境配置的工作没有意义，和我想学的东西一点关系都没有，但是我却要花这么多时间，它不配！“午夜，看着室友花一整天刷了很多力扣脸上洋溢着的成就感，愤怒的火在我心中越烧越烈。
+
+次日，经历了魔鬼配置环境的一天之后，我决定换个方法，”试试vagrant“。于是我按照课程网上的视屏教程，一步一步地做：”安装virtualBox， 安装vagrant，安装git， 添加ssh环境变量...”“哦视频上的软件版本有些旧了，用新版的可行吗？试试吧。”
+
+- `vagrant up`
+- "vagrant up timeout."
+
+”看来新版本的不支持啊？那就用老版本吧。“
+
+- `vagrant up`
+- "vagrant up timeout."
+
+”为什么呢？找同学问问吧。“于是我去找成功配置了vagrant的同学讨教经验，发现一个让人心如死灰的事实：我们两的环境一摸一样，但是vagrant能在他的电脑上运行，我的却不行。”生活就是这样，你永远不知道明天和意外哪个会先来。“
+
+至于后来，我尝试了虚拟机的共享文件夹，但是在make的时候会报错"create symbolic link failed， code/thread/switch.c not found",我怀疑是32位和64位系统文件不兼容的问题。
+
+”什么？你要问我后来怎么样了？“
+
+首先要说一个令人开心的事实，我在旧电脑上成功配置了vagrant，并且用vscode无论是编辑还是查看代码都爽的飞起。但是令人遗憾的事情似乎更多。此时的我，已经完完整整地经历了为期三天的被环境配置折磨的过程。我浪费了生命中三天的时间，谁来赔我？
+
+最后，如果要我对这个课程提出一个建议的话，那一定是”请提供实验环境！“
+
+​																																							                                                                 以上
+
+## 收获及感想
+
+上面的负能量可能比较多，现在开始抒发正能量。
+
+通过本次lab我发现实验没有那么难，最困难的事情应该是从零开始写一个OS。而我们的实验都是建立在别人的框架之上的，我们要做的就是：阅读框架->理解框架->添砖加瓦。
+
+这里要分享一下我读源代码的方法：先看注释，了解某个方法是干什么的。然后再看这个方法的实现，理解之后，默写一遍。对，很多模块除开注释也就几十行，如果你真的理解了，默写并不困难。如果你都做到了，那么就可以自信地说自己已经理解源代码了。
+
+理解了源代码之后，要解决每个exercise基本可以说是信手拈来。
+
+## BUGs
+
+1.通过阅读scheduler.cc中的Run方法我发现了一个nachos的BUG：SWITCH和delete threadToBeDestroyed的顺序反了，这样会导致finish方法调用之后，线程并不会被及时地析构，而系统会进入下一个就绪线程继续运行，原来的这个线程就被永远地阻塞！
+
+猜想：要解决这个bug， 需要将SWITCH和delete的顺序颠倒，这需要我们提前复制一份threadToBeDestroyed的栈空间，以便delete之后可以用它来给SWITCH使用。
+
+2.Nachos的模拟时间在测试函数无限循环时不会增加，比如说，当我写下如下语句时,系统时间会停滞.解决办法：在while中添加一句：interrupt->OneTick()。但是这么做是不妥的，因为OneTick方法是内部硬件的模拟方法，不该直接调用，它的属性应为`private`，之所以为`public`是因为它被硬件模拟代码直接调用。也就是说OneTick()方法出现在此处是不对的，但是我暂时想不到更好的方法，如果有人能解决这个问题，欢迎交流。
 
 ```cpp
 //time-slicing algorithm,in threadTest.cc
 void mySimlpe2(int dummy)
 {
-    cout << "current time is : " << stats->totalTicks << ", thread " << currentThread->getTID() << " is running." << endl;
-    while(stats->totalTicks < 3000);
+    while (stats->totalTicks < 3000);//当系统时间小于3000时无限循环，在测试中使用无限循环来模拟实际中作业的执行
 }
 void timeSlicingTest()
 {
-    for(int i = 0;i<10;++i)
-    {
-        Thread* t = new Thread("forked");
-        t->Fork(mySimlpe2,(void*)1);
-    }
+    Thread *t = new Thread("forked", 1);
+    t->Fork(mySimlpe2, 1);
     mySimlpe2(1);
 }
-//in system.cc
-static void
-TimerInterruptHandler(int dummy)
-{
-    if (interrupt->getStatus() != IdleMode)
-        interrupt->YieldOnReturn();
-    cout << "Current time is " << stats->totalTicks << endl;
-    currentThread->Yield();
-}
-
-//in scheduler.cc把readytorun方法还原一下，别用优先级抢占
-void
-Scheduler::ReadyToRun (Thread *thread)
-{
-    DEBUG('t', "Putting thread %s on ready list.\n", thread->getName());
-
-    thread->setStatus(READY);
-    readyList->Append((void *)thread);
-}
-
 ```
 
+
+
+## 参考文献
+
+[Linux进程描述符task_struct结构体详解--Linux进程的管理与调度（一）](https://blog.csdn.net/gatieme/article/details/51383272)
+
+[汇编语言入门教程](https://www.ruanyifeng.com/blog/2018/01/assembly-language-primer.html)
+
+《Nachos中文教程》
+
+## 致谢
+
+感谢罗哥在我最沮丧的时候陪伴我安装vagrant，虽然没有成功。
+
+感谢陈向群老师多次帮助，感恩。

@@ -485,7 +485,7 @@ int FileHeader::ByteToSector(int offset)
 >
 > [Source--github](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
 
-本次测试产生了一个Nachos物理内存(总共128KB）范围内理论上能够容纳的最大的文件(123KB)，如果脚本运行成功，那么可以证明我们的间接索引实现成功。在terminal中输入`test/large_file_test.sh`可查看结果：
+本次测试产生了一个Nachos物理内存(总共128KB）范围内理论上能够容纳的最大的文件(123KB)，如果脚本运行成功，那么可以证明我们的间接索引实现成功。在terminal中输入`test/large_file_test.sh`可查看结果（如果报错，请新建一个.sh文件，名字任意，把内容copy进去，再次运行即可）：
 
 ```shell
 vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ test/exercise3_large_file_test.sh
