@@ -41,10 +41,10 @@ extern Interrupt *interrupt;		// interrupt status
 extern Statistics *stats;			// performance metrics
 extern Timer *timer;				// the hardware alarm clock
 
-#ifdef USER_PROGRAM
+// #ifdef USER_PROGRAM//暂时注释
 #include "machine.h"
 extern Machine *machine; // user program memory and registers
-#endif
+// #endif
 
 // #ifdef FILESYS_NEEDED // FILESYS or FILESYS_STUB
 #include "filesys.h"

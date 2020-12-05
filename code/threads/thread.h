@@ -40,10 +40,10 @@
 #include "copyright.h"
 #include "utility.h"
 
-#ifdef USER_PROGRAM
+// #ifdef USER_PROGRAM//暂时注释
 #include "machine.h"
 #include "addrspace.h"
-#endif
+// #endif
 
 // CPU register state to be saved on context switch.  
 // The SPARC and MIPS only need 10 registers, but the Snake needs 18.
@@ -126,7 +126,7 @@ class Thread {
     					// Allocate a stack for thread.
 					// Used internally by Fork()
 
-#ifdef USER_PROGRAM
+// #ifdef USER_PROGRAM//暂时注释
 // A thread running a user program actually has *two* sets of CPU registers -- 
 // one for its state while executing user code, one for its state 
 // while executing kernel code.
@@ -138,7 +138,7 @@ class Thread {
     void RestoreUserState();		// restore user-level register state
 
     AddrSpace *space;			// User code this thread is running.
-#endif
+// #endif
 };
 
 // Magical machine-dependent routines, defined in switch.s

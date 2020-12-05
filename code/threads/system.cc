@@ -121,9 +121,9 @@ void Initialize(int argc, char **argv)
     char *debugArgs = "";
     bool randomYield = FALSE;
 
-#ifdef USER_PROGRAM
+// #ifdef USER_PROGRAM//暂时注释
     bool debugUserProg = FALSE; // single step user program
-#endif
+// #endif
 #ifdef FILESYS_NEEDED
     bool format = FALSE; // format disk
 #endif
@@ -153,10 +153,10 @@ void Initialize(int argc, char **argv)
             randomYield = TRUE;
             argCount = 2;
         }
-#ifdef USER_PROGRAM
+// #ifdef USER_PROGRAM//暂时注释
         if (!strcmp(*argv, "-s"))
             debugUserProg = TRUE;
-#endif
+// #endif
 #ifdef FILESYS_NEEDED
         if (!strcmp(*argv, "-f"))
             format = TRUE;
@@ -195,9 +195,9 @@ void Initialize(int argc, char **argv)
     interrupt->Enable();
     CallOnUserAbort(Cleanup); // if user hits ctl-C
 
-#ifdef USER_PROGRAM
+// #ifdef USER_PROGRAM//暂时注释
     machine = new Machine(debugUserProg); // this must come first
-#endif
+// #endif
 
 // #ifdef FILESYS //暂时注释
     synchDisk = new SynchDisk("DISK");

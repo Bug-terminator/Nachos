@@ -51,7 +51,6 @@
 // Machine *machine;
 // TranslationEntry *pageTable, *tlb;
 
-
 //lab2 缺页异常和Lazy-loading
 //朴素页面置换算法
 int NaiveReplacement(int vpn)
@@ -59,7 +58,8 @@ int NaiveReplacement(int vpn)
     int ppn = -1;
     for (int i = 0; i < machine->pageTableSize; i++)
     {
-        if(i == vpn) continue;//跳过自己
+        if (i == vpn)
+            continue; //跳过自己
         if (machine->pageTable[i].valid)
         {
             if (!machine->pageTable[i].dirty)
@@ -73,7 +73,8 @@ int NaiveReplacement(int vpn)
     {
         for (int i = 0; i < machine->pageTableSize; i++)
         {
-            if(i == vpn) continue;
+            if (i == vpn)
+                continue;
             if (machine->pageTable[i].valid)
             {
                 machine->pageTable[i].valid = FALSE;
@@ -89,7 +90,7 @@ int NaiveReplacement(int vpn)
     }
     return ppn;
 }
-          
+
 TranslationEntry
 PageMisstHandler(int vpn)
 {
@@ -175,8 +176,8 @@ void TLBMissHandler(int virtAddr)
 #endif
     }
     DEBUG('a', "tlb[%d] has been exchanged by PageTable[%d].\n", tlbExchangeIndex, vpn);
-    if(machine->pageTable[vpn].valid)
-    machine->tlb[tlbExchangeIndex] = machine->pageTable[vpn]; //将页表中的页面加载到tlb中，因为报错了，所以pc还没增加，所以Nachos会重新查找虚拟地址，这次在tlb中就会命中了
+    if (machine->pageTable[vpn].valid)
+        machine->tlb[tlbExchangeIndex] = machine->pageTable[vpn]; //将页表中的页面加载到tlb中，因为报错了，所以pc还没增加，所以Nachos会重新查找虚拟地址，这次在tlb中就会命中了
     else
         PageMisstHandler(vpn);
     // #ifdef TLB_LRU
@@ -185,38 +186,131 @@ void TLBMissHandler(int virtAddr)
     //注意，此时只是加载页面，还没访问页面，所以不能更新访问时间。
 }
 
+// ==================Lab5===================
+// ==================Lab5===================
+// ==================Lab5===================
+// ==================Lab5===================
+// ==================Lab5===================
+
+//----------------------------------------------------------------------
+// AddressSpaceControlHandler
+// 	Handling address space control related system call.
+//  1. Exit
+//  2. Exec
+//  3. Join
+//----------------------------------------------------------------------
+
+void AddressSpaceControlHandler(int type)
+{
+    if (type == SC_Exit)
+    {
+    }
+}
+
+//----------------------------------------------------------------------
+// FileSystemHandler
+//
+//----------------------------------------------------------------------
+
+// Some definition in userprog/syscall.h has no return (void).
+// Maybe we can have some return (determine success or fail)
+
+#define FileNameMaxLength 20 // originally define in filesys/directory.h，changed in lab4
+
+void FileSystemHandler(int type)
+{
+    if (type == SC_Create)
+    { // void Create(char *name)
+        // int address = machine->ReadRegister(4); // memory starting position
+        char *name = (char *)machine->ReadRegister(4);
+        fileSystem->Create(name, 0);
+    }
+    else if (type == SC_Open)
+    { // OpenFileId Open(char *name);
+        char *name = (char *)machine->ReadRegister(4);
+        OpenFile *openFile = fileSystem->Open(name);
+        machine->WriteRegister(2, (OpenFileId)openFile); // return result
+    }
+    else if (type == SC_Close)
+    {                                                              // void Close(OpenFileId id);
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4); // OpenFile object id
+        delete openFile;                                           // release the file
+    }
+    else if (type == SC_Read)
+    {                                                              // int Read(char *buffer, int size, OpenFileId id);
+        char *buffer = (char *)machine->ReadRegister(4);           // memory starting position
+        int size = machine->ReadRegister(5);                       // read "size" bytes
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6); // OpenFile object ptr
+        int numBytes = openFile->Read(buffer, size);
+        machine->WriteRegister(numBytes, 2);
+    }
+    else if (type == SC_Write)
+    {                                                              // void Write(char *buffer, int size, OpenFileId id);
+        char *buffer = (char *)machine->ReadRegister(4);           // memory starting position
+        int size = machine->ReadRegister(5);                       // read "size" bytes
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6); // OpenFile object ptr
+        openFile->Write(buffer, size);
+    }
+}
+
+// Helper function to get file name using ReadMem for Create and Open syscall
+char *getFileNameFromAddress(int address)
+{
+    int position = 0;
+    int data;
+    char name[FileNameMaxLength + 1];
+    do
+    {
+        // each time read one byte
+        bool success = machine->ReadMem(address + position, 1, &data);
+        name[position++] = (char)data;
+    } while (data != '\0');
+    name[position] = '\0';
+    return name;
+}
+
+//----------------------------------------------------------------------
+// UserLevelThreadsHandler
+//
+//----------------------------------------------------------------------
+
+void UserLevelThreadsHandler(int type)
+{
+}
+
 void ExceptionHandler(ExceptionType which)
 {
-
-    int type = machine->ReadRegister(2);
+    // System Call
+    // The system call codes (SC_[TYPE]) is defined in userprog/syscall.h
+    // The system call stubs is defined in test/start.s
+    int type = machine->ReadRegister(2); // r2: the standard C calling convention on the MIPS
 
     if (which == SyscallException)
     {
         if (type == SC_Halt)
         {
-            machine->PrintTLBStatus(); // TLB debug usage
-#ifdef USER_PROGRAM
-            machine->bitmap->freeMem();
-#endif
             DEBUG('a', "Shutdown, initiated by user program.\n");
+            machine->PrintTLBStatus(); // TLB debug usage
             interrupt->Halt();
         }
         else if (type == SC_Exit || type == SC_Exec || type == SC_Join)
         {
-            machine->PrintTLBStatus(); // TLB debug usage
-
-            if (currentThread->space != NULL)
-            {
-#ifdef USER_PROGRAM
-                machine->bitmap->freeMem();
-#endif
-                delete currentThread->space;
-                currentThread->space = NULL;
-            }
-            currentThread->Finish();
+            // Address Space Control (Process Management) System Calls
+            AddressSpaceControlHandler(type);
         }
+        else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
+        {
+            // File System System Calls
+            FileSystemHandler(type);
+        }
+        else if (type == SC_Fork || type == SC_Yield)
+        {
+            // User-level Threads System Calls
+            UserLevelThreadsHandler(type);
+        }
+
+        // Increment the Program Counter before returning.
         advancePC();
-        return;
     }
     //lab2 exercise2
     else if (which = PageFaultException)
@@ -231,4 +325,3 @@ void ExceptionHandler(ExceptionType which)
         ASSERT(FALSE);
     }
 }
-
