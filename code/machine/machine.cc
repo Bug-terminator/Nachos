@@ -72,6 +72,8 @@ void bitMap::printBitMap() //c语言没有输出2进制的接口，所以用一�
     printf("\n");
 }
 
+
+
 void bitMap::freeMem(void)
 {
     for (int i = 0; i < machine->pageTableSize; i++)
@@ -108,6 +110,16 @@ static void CheckEndian()
 #endif
 }
 
+
+//lab6 
+void Machine::advancePC() 
+{
+    int currPC = ReadRegister(PCReg);
+    WriteRegister(PrevPCReg, currPC);
+    WriteRegister(PCReg, currPC + 4 );
+    WriteRegister(NextPCReg, currPC + 8);
+}
+
 //----------------------------------------------------------------------
 // Machine::Machine
 // 	Initialize the simulation of user program execution.
@@ -115,6 +127,7 @@ static void CheckEndian()
 //	"debug" -- if TRUE, drop into the debugger after each user instruction
 //		is executed.
 //----------------------------------------------------------------------
+
 
 Machine::Machine(bool debug)
 {

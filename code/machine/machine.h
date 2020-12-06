@@ -120,7 +120,9 @@ class Instruction {
 class Machine {
   public:
 	
-
+	//lab6 
+	void advancePC();
+   
     Machine(bool debug);	// Initialize the simulation of the hardware
 				// for running user programs
     ~Machine();			// De-allocate the data structures
@@ -171,7 +173,7 @@ class Machine {
     char *mainMemory;		// physical memory to store user program,
 				// code and data, while executing
     int registers[NumTotalRegs]; // CPU registers, for executing user programs
-
+	
 
 // NOTE: the hardware translation of virtual addresses in the user program
 // to physical addresses (relative to the beginning of "mainMemory")

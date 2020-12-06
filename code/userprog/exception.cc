@@ -114,14 +114,6 @@ PageMisstHandler(int vpn)
     machine->pageTable[vpn].readOnly = FALSE;
 }
 
-//lab2 系统调用不会让pc前进，所以我们需要手动让pc自增
-void advancePC(void)
-{
-    machine->WriteRegister(PrevPCReg, machine->ReadRegister(PCReg));
-    machine->WriteRegister(PCReg, machine->ReadRegister(NextPCReg));
-    machine->WriteRegister(NextPCReg, machine->ReadRegister(NextPCReg) + 4);
-}
-
 //lab2 Print TLB Status
 void Machine ::PrintTLBStatus(void)
 {
@@ -192,9 +184,6 @@ void TLBMissHandler(int virtAddr)
 // ==================Lab5===================
 // ==================Lab5===================
 
-
-
-
 //----------------------------------------------------------------------
 // FileSystemHandler
 // 	Handling file system related system call.
@@ -224,20 +213,20 @@ void FileSystemHandler(int type)
     { // void Create(char *name)
         char *name = getNameFromNachosMemory(machine->ReadRegister(4));
         fileSystem->Create(name, 0);
-        cout << "Success create file " << name << endl;
+        cout << "Success create file name " << name << endl;
         delete[] name; //回收内存
     }
     else if (type == SC_Open)
     {
         char *name = getNameFromNachosMemory(machine->ReadRegister(4)); // OpenFileId Open(char *name);
         machine->WriteRegister(2, (OpenFileId)fileSystem->Open(name));  // return result
-        cout << "Success open file " << name << endl;
+        cout << "Success open file name " << name << endl;
         delete[] name; //回收内存
     }
     else if (type == SC_Close)
-    {                                                                   // void Close(OpenFileId id);
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);      // OpenFile object id
-        cout << "Success delete file " << (OpenFileId)openFile << endl; // release the file
+    {                                                                      // void Close(OpenFileId id);
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);         // OpenFile object id
+        cout << "Success delete file ID " << (OpenFileId)openFile << endl; // release the file
         delete openFile;
     }
     else if (type == SC_Read)
@@ -247,7 +236,7 @@ void FileSystemHandler(int type)
         OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);      // OpenFile object ptr
         int numByte = openFile->Read(&machine->mainMemory[addr], size); //read from file
         machine->WriteRegister(2, numByte);                             //return value
-        cout << "Success read " << numByte << "bytes from file " << (OpenFileId)openFile << endl;
+        cout << "Success read " << numByte << "bytes from file ID " << (OpenFileId)openFile << endl;
     }
     else if (type == SC_Write)
     {                                                                    // void Write(char *buffer, int size, OpenFileId id);
@@ -255,7 +244,7 @@ void FileSystemHandler(int type)
         int size = machine->ReadRegister(5);                             // read "size" bytes
         OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);       // OpenFile object ptr
         int numByte = openFile->Write(&machine->mainMemory[addr], size); //write to file
-        cout << "Success write " << numByte << "bytes to file " << (OpenFileId)openFile << endl;
+        cout << "Success write " << numByte << "bytes to file ID" << (OpenFileId)openFile << endl;
     }
 }
 
@@ -263,11 +252,70 @@ void FileSystemHandler(int type)
 //  UserProgHandler
 // 	Handling user program related system call.
 //----------------------------------------------------------------------
+void exec_func(int addr) //mainMemory start positon
+{
+    char *name = getNameFromNachosMemory(addr);
+    OpenFile *executable = fileSystem->Open(name);
+    AddrSpace *space = new AddrSpace(executable);
+    delete executable;
+    currentThread->space = space;
+    space->InitRegisters();//
+    space->RestoreState();
+    machine->Run();
+    ASSERT(FALSE); //never return
+}
+
+void fork_func(int arg)
+{
+    // currentThread->space->InitRegisters(); //初始化寄存器
+    currentThread->space->RestoreState();  //继承父进程的页表
+    // Set PC to *arg*
+    machine->WriteRegister(PCReg, arg);//从函数处开始执行
+    machine->WriteRegister(NextPCReg, arg + 4);
+    machine->Run();
+}
+
 void UserProgHandler(int type)
 {
-    if(type == SC_Exec)
+    if (type == SC_Exec)
     {
-        char *name = getNameFromNachosMemory(machine->ReadRegister(4));
+        int addr = machine->ReadRegister(4);
+        Thread *thread = new Thread("exec_thread");
+        thread->Fork(exec_func, addr);
+        machine->WriteRegister(2, (SpaceId)thread);
+        machine->advancePC();
+    }
+    else if (type == SC_Fork)
+    {
+        // currentThread->SaveUserState(); // Save Registers
+        int funcAddr = machine->ReadRegister(4);
+        // Create a new thread in the same addrspace
+        Thread *thread = new Thread("fork_thread");
+        thread->space = currentThread->space;
+        // thread->RestoreUserState();
+        thread->Fork(fork_func, funcAddr);
+        // currentThread->RestoreUserState(); // restore Registers
+        machine->advancePC();
+    }
+    else if (type == SC_Yield)
+    {
+        machine->advancePC(); //先增加pc，否则死循环
+        currentThread->Yield();
+    }
+    else if (type == SC_Exit)
+    {
+        int status = machine->ReadRegister(4);
+        printf("program exist with status %d.\n", status);
+        machine->bitmap->freeMem(); //释放位图
+        machine->advancePC();       //先增加pc，否则死循环
+        currentThread->Finish();
+    }
+    else if (type == SC_Join)
+    {
+        Thread *thread = (Thread *)machine->ReadRegister(4);
+        while (thread)
+            currentThread->Yield();
+        machine->advancePC();
     }
 }
 
@@ -292,9 +340,9 @@ void ExceptionHandler(ExceptionType which)
         else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
         {
             FileSystemHandler(type);
+            // Increment the Program Counter before returning.
+            machine->advancePC();
         }
-        // Increment the Program Counter before returning.
-        advancePC();
     }
 
     //lab2 exercise2

@@ -34,7 +34,20 @@
 
 Thread::Thread(char *threadname)
 {
-    
+    //lab1
+    //遍历数组查找可分配的tID
+    for (int i = 0; i < maxThreadNum; ++i)
+    {
+        if (isAllocatable[i])
+        {
+            uID = 0;
+            tID = i;
+            isAllocatable[i] = false;
+            threadPtr[i] = this;
+            threadCount++;
+            break;
+        }
+    }
     name = threadname;
     stackTop = NULL;
     stack = NULL;
@@ -60,8 +73,6 @@ Thread::Thread(char *threadName, int pr)
             isAllocatable[i] = false;
             threadPtr[i] = this;
             threadCount++;
-            if (currentThread)
-                // cout << "thread " << currentThread->getTID() << " created a new thread, tID = " << tID << " ,prio = " << prio << endl;
             break;
         }
     }
@@ -89,15 +100,16 @@ Thread::Thread(char *threadName, int pr)
 Thread::~Thread()
 {
     DEBUG('t', "Deleting thread \"%s\"\n", name);
-#ifdef LAB1
+
     threadPtr[tID] = NULL;
     isAllocatable[tID] = true;
     threadCount--;
     // cout << "thread " << getTID() << " has been deleted by thread " << currentThread->getTID() << endl;
-    #endif
+    
     ASSERT(this != currentThread);
     if (stack != NULL)
         DeallocBoundedArray((char *)stack, StackSize * sizeof(int));
+    
 }
 
 //----------------------------------------------------------------------
@@ -120,7 +132,7 @@ Thread::~Thread()
 //	"arg" is a single argument to be passed to the procedure.
 //----------------------------------------------------------------------
 
-//lab2 多线程 将参数arg的类型从int改为char *， 又改了回来
+
 void Thread::Fork(VoidFunctionPtr func, int arg)
 {
     DEBUG('t', "Forking thread \"%s\" with func = 0x%x, arg = %d\n",
