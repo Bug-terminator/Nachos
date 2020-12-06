@@ -192,32 +192,23 @@ void TLBMissHandler(int virtAddr)
 // ==================Lab5===================
 // ==================Lab5===================
 
-//----------------------------------------------------------------------
-// AddressSpaceControlHandler
-// 	Handling address space control related system call.
-//  1. Exit
-//  2. Exec
-//  3. Join
-//----------------------------------------------------------------------
 
-void AddressSpaceControlHandler(int type)
-{
-    if (type == SC_Exit)
-    {
-    }
-}
+
 
 //----------------------------------------------------------------------
 // FileSystemHandler
-//
+// 	Handling file system related system call.
 //----------------------------------------------------------------------
+#ifndef FileNameMaxLength
 #define FileNameMaxLength 20 // originally define in filesys/directory.h，changed in lab4
+#endif
+
 // Helper function to get file name using ReadMem for Create and Open syscall
 char *getNameFromNachosMemory(int address)
 {
     int position = 0;
     int data;
-    char *name = new char[FileNameMaxLength + 1]; //使用char[]出现乱码，改用动态分配数组解决问题
+    char *name = new char[FileNameMaxLength + 1]; //使用char[] int stack while new char[] in heap.
     do
     {
         // each time read one byte
@@ -244,8 +235,8 @@ void FileSystemHandler(int type)
         delete[] name; //回收内存
     }
     else if (type == SC_Close)
-    {                                                                  // void Close(OpenFileId id);
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);     // OpenFile object id
+    {                                                                   // void Close(OpenFileId id);
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);      // OpenFile object id
         cout << "Success delete file " << (OpenFileId)openFile << endl; // release the file
         delete openFile;
     }
@@ -269,17 +260,20 @@ void FileSystemHandler(int type)
 }
 
 //----------------------------------------------------------------------
-// UserLevelThreadsHandler
-//
+//  UserProgHandler
+// 	Handling user program related system call.
 //----------------------------------------------------------------------
-
-void UserLevelThreadsHandler(int type)
+void UserProgHandler(int type)
 {
+    if(type == SC_Exec)
+    {
+        char *name = getNameFromNachosMemory(machine->ReadRegister(4));
+    }
 }
 
 void ExceptionHandler(ExceptionType which)
 {
-    // System Call
+    // lab6 System Call
     // The system call codes (SC_[TYPE]) is defined in userprog/syscall.h
     // The system call stubs is defined in test/start.s
     int type = machine->ReadRegister(2); // r2: the standard C calling convention on the MIPS
@@ -289,28 +283,20 @@ void ExceptionHandler(ExceptionType which)
         if (type == SC_Halt)
         {
             DEBUG('a', "Shutdown, initiated by user program.\n");
-            // machine->PrintTLBStatus(); // TLB debug usage
             interrupt->Halt();
         }
-        else if (type == SC_Exit || type == SC_Exec || type == SC_Join)
+        else if (type == SC_Exit || type == SC_Exec || type == SC_Join || type == SC_Fork || type == SC_Yield)
         {
-            // Address Space Control (Process Management) System Calls
-            AddressSpaceControlHandler(type);
+            UserProgHandler(type);
         }
         else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
         {
-            // File System System Calls
             FileSystemHandler(type);
         }
-        else if (type == SC_Fork || type == SC_Yield)
-        {
-            // User-level Threads System Calls
-            UserLevelThreadsHandler(type);
-        }
-
         // Increment the Program Counter before returning.
         advancePC();
     }
+
     //lab2 exercise2
     else if (which = PageFaultException)
     {

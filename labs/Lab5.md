@@ -41,15 +41,7 @@
 #ifndef IN_ASM
 
 //停止Nachos，打印统计信息
-void Halt();		
- 
-//地址空间相关，3个:
-//用户程序执行完成，status = 0表示正常退出
-void Exit(int status);	
-//加载并执行名为name的可执行文件，返回其地址空间标识符SpaceId
-SpaceId Exec(char *name);
-//等待标识符为id的用户线程执行完毕，返回其退出状态
-int Join(SpaceId id); 	
+void Halt();		 	
 
 //文件系统相关，5个：
 //每个打开文件的独立标识
@@ -65,11 +57,17 @@ int Read(char *buffer, int size, OpenFileId id);
 //关闭标识符为id的文件
 void Close(OpenFileId id);
 
-//用户级线程相关，2个,用于支持多线程用户程序:
+//用户级线程相关，5个:
 //创建和当前线程拥有相同地址空间的线程，运行func指针指向的函数
 void Fork(void (*func)());
 //当前线程让出CPU
 void Yield();		
+//用户程序执行完成，status = 0表示正常退出
+void Exit(int status);	
+//加载并执行名为name的可执行文件，返回其地址空间标识符SpaceId
+SpaceId Exec(char *name);
+//等待标识符为id的用户线程执行完毕，返回其退出状态
+int Join(SpaceId id);
 ```
 
 #### code/userprog/exception.cc
@@ -117,7 +115,7 @@ void Yield();
    	.end __start
    ```
 
-2. 系统调用：将系统调用号存入r2寄存器，跳转到exception.cc，以系统调用Halt为例：
+2. 系统调用：将系统调用号存入r2寄存器，跳转到*exception*.*cc*，以系统调用*Halt*为例：
 
    ```c
    .globl Halt
@@ -129,9 +127,9 @@ void Yield();
    	.end Halt
    ```
 
-   因为用的是j指令，所以在执行系统调用之后需要人为地将pc的值增加4，否则程序会进入死循环。
+   因为用的是j指令，所以在执行系统调用之后需要人为地将*pc*的值增加4，否则程序会进入死循环。
 
-#### 系统调用流程：
+#### 系统调用流程
 
 >*machine*的*Run*函数运行用户程序，实现在*machine*/*mipssim*.cc，基本流程是通过*OneInstruction*函数完成指令译码和执行，通过*interrupt*->*OneTick*函数使得时钟前进 
 >（1）*OneInstruction*函数判断当前指令是系统调用，转入*start*.*s* 
@@ -148,15 +146,14 @@ void Yield();
 
 > 类比*Halt*的实现，完成与文件系统相关的系统调用：*Create*, *Open*，*Close*，*Write*，*Read*。*Syscall*.*h*文件中有这些系统调用基本说明。
 
-> 为此我专门写了一个函数*FileSystemHandler*来处理文件系统系统调用:
->
-> ```cpp
->else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
->      {
->          // File System System Calls
->             FileSystemHandler(type);
->         }
->    ```
+为此我专门写了一个函数*FileSystemHandler*来处理文件系统系统调用:
+
+ ```cpp
+else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
+{
+    FileSystemHandler(type);
+}
+ ```
 
 #### advancePC()
 
@@ -360,63 +357,55 @@ rose is a rose is a rose.
 
 ### Exercise 4 系统调用实现
 
-> 实现如下系统调用：Exec，Fork，Yield，Join，Exit。Syscall.h文件中有这些系统调用基本说明。
+> 实现如下系统调用：*Exec*，*Fork*，*Yield*，*Join*，*Exit*。*Syscall*.*h*文件中有这些系统调用基本说明。
 
-> 为此我专门写了一个函数*FileSystemHandler*来处理文件系统系统调用:
->
-> ```cpp
-> else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
->      {
->          // File System System Calls
->          FileSystemHandler(type);
->      }
-> ```
+为此我专门写了一个函数*FileSystemHandler*来处理文件系统系统调用:
 
-#### advancePC()
+ ```cpp
+else if (type == SC_Exit || type == SC_Exec || type == SC_Join || type == SC_Fork || type == SC_Yield)
+{
+    UserProgHandler(type);
+}
+ ```
 
-> 自增*PC*
+### Exec()
 
 ```cpp
-void advancePC(void) {
-    machine->WriteRegister(PrevPCReg, machine->ReadRegister(PCReg));
-    machine->WriteRegister(PCReg, machine->ReadRegister(NextPCReg));
-    machine->WriteRegister(NextPCReg, machine->ReadRegister(NextPCReg)+4);
+SpaceId Exec(char *name);
+```
+
+加载并执行名为*name*的可执行文件，具体流程可以参考*startProcess*():
+
+```cpp
+void StartProcess(char *filename)
+{
+    OpenFile *executable = fileSystem->Open(filename);
+    AddrSpace *space;
+
+    if (executable == NULL)
+    {
+        printf("Unable to open file %s\n", filename);
+        return;
+    }
+    space = new AddrSpace(executable);
+    currentThread->space = space;
+
+    delete executable; // close file
+
+    space->InitRegisters(); // set the initial register values
+    space->RestoreState();  // load page table register
+
+    machine->Run(); // jump to the user progam
+    ASSERT(FALSE);  // machine->Run never returns;
+                    // the address space exits
+                    // by doing the syscall "exit"
 }
 ```
 
-#### getNameFromNachosMemory()
-
-> 从*Nachos*内存中获取文件名的辅助函数
+### Fork()
 
 ```cpp
-char* getNameFromNachosMemory(int address) {
-    int position = 0;
-    int data;
-    char *name = new char[FileNameMaxLength + 1];
-    do {
-        // each time read one byte
-        machine->ReadMem(address + position, 1, &data);
-        name[position++] = (char)data;
-    } while(data != 0);
-    return name;
-}
-```
-
-### Create()
-
-```cpp
-void Create(char *name);
-```
-
-1. 通过*r4*寄存器获取文件名在*Nachos*中的地址
-2. 通过*getNameFromNachosMemory*()获得文件名
-3. 调用*filesys*->*Create*()创建文件
-4. 调用*advancePC*函数自增*PC*
-
-### Open()
-
-```cpp
-OpenFileId Open(char *name);
+void Fork(void (*func)());
 ```
 
 1. 通过*r4*寄存器获取文件名在Nachos中的地址
@@ -425,10 +414,10 @@ OpenFileId Open(char *name);
 4. 将*openfile*的地址（所谓的*OpenFileId*）写入r2寄存器
 5. 调用*advancePC*函数自增*PC*
 
-### Write()
+### Yield()
 
 ```cpp
-void Write(char *buffer, int size, OpenFileId id);
+void Yield();		
 ```
 
 1. 读取r4/5/6获取三个参数（*buffer*在*nachos*内存中，其余两个在宿主主机内存，直接强转即可）
@@ -436,10 +425,10 @@ void Write(char *buffer, int size, OpenFileId id);
 3. 调用*openfile*->*Write*()向*buffer*中写*size*个字节
 4. 调用*advancePC*函数自增*PC*
 
-### Read()
+### Join()
 
 ```cpp
-int Read(char *buffer, int size, OpenFileId id);
+int Join(SpaceId id);
 ```
 
 1. 读取r4/5/6获取三个参数（*buffer*在*nachos*内存中，其余两个在宿主主机内存，直接强转即可）
@@ -448,58 +437,15 @@ int Read(char *buffer, int size, OpenFileId id);
 4. 将*numBytes*存入*r2*寄存器
 5. 调用*advancePC*函数自增*PC*
 
-### Close()
+### Exit()
 
 ```cpp
-void Close(OpenFileId id);
+void Exit(int status);	
 ```
 
-1. 读取*r4*获取*openFile*型指针（初始是*int*型，强转为对应类型即可）
+1. 读取r4获取*openFile*型指针（初始是*int*型，强转为对应类型即可）
 2. 使用*delete*析构该*openFile*
 3. 调用*advancePC*函数自增*PC*
-
-```cpp
-void FileSystemHandler(int type)
-{
-    if (type == SC_Create)
-    { // void Create(char *name)
-        char *name = getNameFromNachosMemory(machine->ReadRegister(4));
-        fileSystem->Create(name, 0);
-        cout << "Success create file " << name << endl;
-        delete[] name; //回收内存
-    }
-    else if (type == SC_Open)
-    {
-        char *name = getNameFromNachosMemory(machine->ReadRegister(4)); // OpenFileId Open(char *name);
-        machine->WriteRegister(2, (OpenFileId)fileSystem->Open(name));  // return result
-        cout << "Success open file" << name << endl;
-        delete[] name; //回收内存
-    }
-    else if (type == SC_Close)
-    {                                                                  // void Close(OpenFileId id);
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);     // OpenFile object id
-        cout << "Success delete file" << (OpenFileId)openFile << endl; // release the file
-        delete openFile;
-    }
-    else if (type == SC_Read)
-    {                                                                   // int Read(char *buffer, int size, OpenFileId id);
-        int addr = machine->ReadRegister(4);                            // memory starting position
-        int size = machine->ReadRegister(5);                            // read "size" bytes
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);      // OpenFile object ptr
-        int numByte = openFile->Read(&machine->mainMemory[addr], size); //read from file
-        machine->WriteRegister(2, numByte);                             //return value
-        cout << "Success read " << numByte << "bytes from file " << (OpenFileId)openFile << endl;
-    }
-    else if (type == SC_Write)
-    {                                                                    // void Write(char *buffer, int size, OpenFileId id);
-        int addr = machine->ReadRegister(4);                             // memory starting position
-        int size = machine->ReadRegister(5);                             // read "size" bytes
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);       // OpenFile object ptr
-        int numByte = openFile->Write(&machine->mainMemory[addr], size); //write to file
-        cout << "Success write " << numByte << "bytes to file " << (OpenFileId)openFile << endl;
-    }
-}
-```
 
 ### Exercise 5  编写用户程序
 
