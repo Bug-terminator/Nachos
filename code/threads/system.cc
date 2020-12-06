@@ -30,13 +30,13 @@ bool verbose = FALSE;
 FileSystem *fileSystem;
 // #endif
 
-// #ifdef FILESYS 
+#ifdef FILESYS //暂时注释
 SynchDisk *synchDisk;
-// #endif
-
-#ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB
-Machine *machine;   // user program memory and registers
 #endif
+
+// #ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB//暂时注释 lab5
+Machine *machine;   // user program memory and registers
+// #endif
 
 #ifdef NETWORK
 PostOffice *postOffice;
@@ -199,13 +199,13 @@ void Initialize(int argc, char **argv)
     machine = new Machine(debugUserProg); // this must come first
 // #endif
 
-// #ifdef FILESYS //暂时注释
+#ifdef FILESYS //暂时注释
     synchDisk = new SynchDisk("DISK");
-// #endif
+#endif
 
-// #ifdef FILESYS_NEEDED //暂时注释
+#ifdef FILESYS_NEEDED //暂时注释
     fileSystem = new FileSystem(format);
-// #endif
+#endif
 
 #ifdef NETWORK
     postOffice = new PostOffice(netname, rely, 10);

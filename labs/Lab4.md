@@ -1,5 +1,9 @@
 # Lab4 文件系统
 
+## 说明
+
+在之前的lab3和本次lab中的测试结果均使用代码块保存，这是因为测试结果大多比较长，截图不好看。本人郑重承诺所有结果均无篡改情况，本人愿意承担篡改结果的一切后果。每个测试之前都给出了方法，欢迎验证。
+
 > 【实习建议】
 >
 > 1. 数据结构的修改和维护
@@ -61,10 +65,6 @@
 > |                Disk               |
 > +-----------------------------------+
 > ```
-
-#### dick.cc disk.h
-
-TODO
 
 #### bitmap.cc bitmap.h
 
@@ -250,81 +250,38 @@ private:
 
 Nachos文件通过code/filesys/filesys.cc中的create函数创建，创建文件会调用FileHeader::Allocate()函数初始化一个i-node，应该在此函数内部增加对createTime的维护。每次通过OpenFile访问文件，在读时需要对lastVisitedTime进行更新，在写时需要对lastModifiedTime进行更新，并且需要在OpenFile的析构函数中加入将hdr写回磁盘的语句。
 
+```cpp
+int OpenFile::ReadAt(char *into, int numBytes, int position)
+{
+    //lab4 exercise2
+    hdr->SetLastVisitedTime();
+    return numBytes;
+}
+
+int OpenFile::WriteAt(char *from, int numBytes, int position)
+{
+    //lab4 exercise2
+    hdr->SetLastModifiedTime();
+    hdr->SetLastVisitedTime();
+    // synchDisk->rwLock[hdr->GetInodeSector()]->WriterRelease();
+    return numBytes;
+}
+
+OpenFile::~OpenFile()
+{
+    //lab4 exercise2
+    hdr->WriteBack(hdr->GetInodeSector());
+    delete hdr;
+}
+```
+
 以上的实现假设对i-node的修改不算作对文件本身的修改。
 
-具体实现请查看`code/filesys/openfile.cc`和`code/filesys/filehdr.cc`。
-
-#### 测试
-
-```cpp
-vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -f -D
-Bit map file header:
-File type: NORM
-Created: Sat Nov 28 08:09:49 2020
-Modified: Sat Nov 28 08:09:49 2020
-Visited: Sat Nov 28 08:09:49 2020
-FileHeader contents.  File size: 128.  File blocks:
-2
-File contents:
-\f\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
-Directory file header:
-File type: DIR
-Created: Sat Nov 28 08:09:49 2020
-Modified: Sat Nov 28 08:09:49 2020
-Visited: Sat Nov 28 08:09:49 2020
-FileHeader contents.  File size: 120.  File blocks:
-3
-File contents:
-\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
-Bitmap set:
-0, 1, 2, 3,
-Directory contents:
-
-```
+更多细节请查看`code/filesys/openfile.cc`和`code/filesys/filehdr.cc`。
 
 #### 突破文件名长度的限制
 
 将char[]改为char*，并修改ADD()和FindIndex()函数中的strncmp()和strncpy()函数即可。
-
-#### 测试
-
-```cpp
-vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -f -cp test/small this_is_a_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_long_fileName -D
-Bit map file header:
-File type: NORM
-Created: Sat Nov 28 09:44:10 2020
-Modified: Sat Nov 28 09:44:10 2020
-Visited: Sat Nov 28 09:44:10 2020
-FileHeader contents.  File size: 128.  File blocks:
-2
-File contents:
-?\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
-Directory file header:
-File type: DIR
-Created: Sat Nov 28 09:44:10 2020
-Modified: Sat Nov 28 09:44:10 2020
-Visited: Sat Nov 28 09:44:10 2020
-FileHeader contents.  File size: 120.  File blocks:
-3
-File contents:
-\1\0\0\0\4\0\0\0h\88\f8\bf\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
-Bitmap set:
-0, 1, 2, 3, 4, 5,
-Directory contents:
-Name: this_is_a_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_super_long_fileName, Sector: 4
-File type: NORM
-Created: Sat Nov 28 09:44:10 2020
-Modified: Sat Nov 28 09:44:10 2020
-Visited: Sat Nov 28 09:44:10 2020
-FileHeader contents.  File size: 38.  File blocks:
-5
-File contents:
-This is the spring of our discontent.\a
-```
-
-#### 结论
-
-成功完成exercise2。
 
 #### 反思
 
@@ -332,10 +289,9 @@ This is the spring of our discontent.\a
 >
 > [深入 char * ,char ** ,char a[] ,char *a[] 内核-CSDN](https://blog.csdn.net/daiyutage/article/details/8604720)
 
-Linux中文件名的存储方式为char[],这引起了我的反思。为什么放着空间更小，表达长度更多的的char*不用，要选择固定长度的，占空间更大的char[]？因为char表示的内存在主机关机之后会被回收，下一次开机，用同样的内存地址去寻找必然导致出错。而且在exercise3中，使用char\*的变量都出现了乱码，directory中print name时会报segmentation fault，我尚不清楚原因是为何，希望老师能指点一二。
+Linux中文件名的存储方式为char[],这引起了我的反思。为什么放着空间更小，表达长度更多的的char*不用，要选择固定长度的，占空间更大的char[]？因为char表示的内存在主机关机之后会被回收，下一次开机，用同样的内存地址去寻找必然导致出错。而且在exercise3中，使用char\*的变量都出现了乱码，directory中print name时会报segmentation fault。
 
 ```cpp
-//乱码
 Created: KSt10moneypunctIcLb1EE13negative_signEv
 Modified: KSt10moneypunctIcLb1EE13negative_signEv
 Visited: KSt10moneypunctIcLb1EE13negative_signEvFileHeader 
@@ -368,6 +324,83 @@ char *FileHeader::TimeToString(time_t t)
     return asctime(timeinfo);
 }
 ```
+
+#### 扩展文件属性测试
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -f -D
+Bit map file header:
+File type: NORM
+Created: Sat Nov 28 08:09:49 2020
+Modified: Sat Nov 28 08:09:49 2020
+Visited: Sat Nov 28 08:09:49 2020
+FileHeader contents.  File size: 128.  File blocks:
+2
+File contents:
+\f\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
+Directory file header:
+File type: DIR
+Created: Sat Nov 28 08:09:49 2020
+Modified: Sat Nov 28 08:09:49 2020
+Visited: Sat Nov 28 08:09:49 2020
+FileHeader contents.  File size: 120.  File blocks:
+3
+File contents:
+\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
+Bitmap set:
+0, 1, 2, 3,
+Directory contents:
+```
+
+测试显示三个时间是相同的，是因为测试使用的是格式化磁盘，没有进行读写。在exercise3的大文件测试中，LargeFile的三个时间有时间差，可以证明我们的实现是正确的。
+
+```cpp
+Name: largeFile, Sector: 6
+File type: NORM
+Created: Thu Dec  3 01:39:34 2020
+Modified: Thu Dec  3 01:39:44 2020
+Visited: Thu Dec  3 01:39:44 2020
+```
+
+#### 突破文件名长度测试
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/filesys$ ./nachos -f -cp test/small this_is_a_fileName -D
+Bit map file header:
+File type: NORM
+Created: Sat Nov 28 09:44:10 2020
+Modified: Sat Nov 28 09:44:10 2020
+Visited: Sat Nov 28 09:44:10 2020
+FileHeader contents.  File size: 128.  File blocks:
+2
+File contents:
+\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
+Directory file header:
+File type: DIR
+Created: Sat Nov 28 09:44:10 2020
+Modified: Sat Nov 28 09:44:10 2020
+Visited: Sat Nov 28 09:44:10 2020
+FileHeader contents.  File size: 120.  File blocks:
+3
+File contents:
+\1\0\0\0\4\0\0\this_is_a_fileName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
+Bitmap set:
+0, 1, 2, 3, 4, 5,
+Directory contents:
+Name: this_is_a_fileName, Sector: 4
+File type: NORM
+Created: Sat Nov 28 09:44:10 2020
+Modified: Sat Nov 28 09:44:10 2020
+Visited: Sat Nov 28 09:44:10 2020
+FileHeader contents.  File size: 38.  File blocks:
+5
+File contents:
+This is the spring of our discontent.\a
+```
+
+#### 结论
+
+成功添加文件属性，成功突破文件名长度为10的限制，成功完成exercise2。
 
 ### Exercise 3 扩展文件长度
 
@@ -1206,7 +1239,9 @@ Network I/O: packets received 0, sent 0
 
 #### 结论
 
-结果显示：在测试文件为50000B的情况下，程序先初始化一个size为0的文件，每次写入十个字符，每当文件大小不足时，动态扩展一个sector，直到扩展到391块时(391*128 = 50048)，结束，此时整个文件完成写入。并顺利执行文件读测试(没有报错`Perf test: unable to read TestFile`就证明读成功了），结论：实验结果正确。
+结果显示：在测试文件为50000B的情况下，程序先初始化一个size为0的文件，每次写入十个字符，每当文件大小不足时，动态扩展一个sector，直到扩展到391块时(391*128 = 50048)，结束，此时整个文件完成写入。并顺利执行文件读测试(没有报错`Perf test: unable to read TestFile`就证明读成功了）。
+
+整个过程读40903次，写7202次，符合实际，证明实验结果正确。
 
 ## **二、文件访问的同步与互斥**
 
@@ -1641,6 +1676,18 @@ bool FileHeader::expandFile(BitMap *freeMap, int extraBytes)
 ```
 
 即将numBytes的定义改为当前文件的最大容量(B)，成功解决bug。
+
+## 收获&感想
+
+这次lab我整整写了3周，有很多细节需要慢慢调试，一层层函数套下来，调试写的DEBUG太多，有时候都忘记在哪里写了个DEBUG，打印结果常常让人很抓狂。
+
+真的超级麻烦，会有各种意想不到的情况发生，有时候之前还能运行的脚本，因为后面的某个修改变得失效了，又需要一点一点地看改动的地方可能会产生什么影响，一点一点地排查。
+
+现在呈现在您面前的代码都是我一点一点反复斟酌，一版一版反复修改的最终版本，如果有兴趣可以看看filesys_pending文件夹下面的代码，里面有我写坏的很多版本，或者有一些版本是work的，但是我嫌弃代码太烂了，又重新改了（比如说间接索引，为了实现二级索引的分配和扩展，我反复改了三版，耗费了我整整一周的时间，最后才拿出一个让我比较满意的版本）。
+
+可以说，这次lab的每一个测试结果，都是说明我很认真完成了这次lab的凭证。为了让测试结果符合我心中正确程序应该有的样子，真的调试了很久很久。。。
+
+不过，当结果最终呈现在眼前的时候，那种成就感，是溢于言表的！
 
 ## 参考文献：
 

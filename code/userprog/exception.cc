@@ -211,62 +211,61 @@ void AddressSpaceControlHandler(int type)
 // FileSystemHandler
 //
 //----------------------------------------------------------------------
-
-// Some definition in userprog/syscall.h has no return (void).
-// Maybe we can have some return (determine success or fail)
-
 #define FileNameMaxLength 20 // originally define in filesys/directory.h，changed in lab4
+// Helper function to get file name using ReadMem for Create and Open syscall
+char *getNameFromNachosMemory(int address)
+{
+    int position = 0;
+    int data;
+    char *name = new char[FileNameMaxLength + 1]; //使用char[]出现乱码，改用动态分配数组解决问题
+    do
+    {
+        // each time read one byte
+        machine->ReadMem(address + position, 1, &data);
+        name[position++] = (char)data;
+    } while (data != 0);
+    return name;
+}
 
 void FileSystemHandler(int type)
 {
     if (type == SC_Create)
     { // void Create(char *name)
-        // int address = machine->ReadRegister(4); // memory starting position
-        char *name = (char *)machine->ReadRegister(4);
+        char *name = getNameFromNachosMemory(machine->ReadRegister(4));
         fileSystem->Create(name, 0);
+        cout << "Success create file " << name << endl;
+        delete[] name; //回收内存
     }
     else if (type == SC_Open)
-    { // OpenFileId Open(char *name);
-        char *name = (char *)machine->ReadRegister(4);
-        OpenFile *openFile = fileSystem->Open(name);
-        machine->WriteRegister(2, (OpenFileId)openFile); // return result
+    {
+        char *name = getNameFromNachosMemory(machine->ReadRegister(4)); // OpenFileId Open(char *name);
+        machine->WriteRegister(2, (OpenFileId)fileSystem->Open(name));  // return result
+        cout << "Success open file " << name << endl;
+        delete[] name; //回收内存
     }
     else if (type == SC_Close)
-    {                                                              // void Close(OpenFileId id);
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4); // OpenFile object id
-        delete openFile;                                           // release the file
+    {                                                                  // void Close(OpenFileId id);
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);     // OpenFile object id
+        cout << "Success delete file " << (OpenFileId)openFile << endl; // release the file
+        delete openFile;
     }
     else if (type == SC_Read)
-    {                                                              // int Read(char *buffer, int size, OpenFileId id);
-        char *buffer = (char *)machine->ReadRegister(4);           // memory starting position
-        int size = machine->ReadRegister(5);                       // read "size" bytes
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6); // OpenFile object ptr
-        int numBytes = openFile->Read(buffer, size);
-        machine->WriteRegister(numBytes, 2);
+    {                                                                   // int Read(char *buffer, int size, OpenFileId id);
+        int addr = machine->ReadRegister(4);                            // memory starting position
+        int size = machine->ReadRegister(5);                            // read "size" bytes
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);      // OpenFile object ptr
+        int numByte = openFile->Read(&machine->mainMemory[addr], size); //read from file
+        machine->WriteRegister(2, numByte);                             //return value
+        cout << "Success read " << numByte << "bytes from file " << (OpenFileId)openFile << endl;
     }
     else if (type == SC_Write)
-    {                                                              // void Write(char *buffer, int size, OpenFileId id);
-        char *buffer = (char *)machine->ReadRegister(4);           // memory starting position
-        int size = machine->ReadRegister(5);                       // read "size" bytes
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6); // OpenFile object ptr
-        openFile->Write(buffer, size);
+    {                                                                    // void Write(char *buffer, int size, OpenFileId id);
+        int addr = machine->ReadRegister(4);                             // memory starting position
+        int size = machine->ReadRegister(5);                             // read "size" bytes
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);       // OpenFile object ptr
+        int numByte = openFile->Write(&machine->mainMemory[addr], size); //write to file
+        cout << "Success write " << numByte << "bytes to file " << (OpenFileId)openFile << endl;
     }
-}
-
-// Helper function to get file name using ReadMem for Create and Open syscall
-char *getFileNameFromAddress(int address)
-{
-    int position = 0;
-    int data;
-    char name[FileNameMaxLength + 1];
-    do
-    {
-        // each time read one byte
-        bool success = machine->ReadMem(address + position, 1, &data);
-        name[position++] = (char)data;
-    } while (data != '\0');
-    name[position] = '\0';
-    return name;
 }
 
 //----------------------------------------------------------------------
@@ -290,7 +289,7 @@ void ExceptionHandler(ExceptionType which)
         if (type == SC_Halt)
         {
             DEBUG('a', "Shutdown, initiated by user program.\n");
-            machine->PrintTLBStatus(); // TLB debug usage
+            // machine->PrintTLBStatus(); // TLB debug usage
             interrupt->Halt();
         }
         else if (type == SC_Exit || type == SC_Exec || type == SC_Join)

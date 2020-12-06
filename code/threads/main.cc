@@ -64,7 +64,7 @@ extern void Print(char *file), PerformanceTest(void);
 extern void StartProcess(char *file), ConsoleTest(char *in, char *out), startMultiProcess(char *filename); //lab2 多线程
 extern void MailTest(int networkID);
 //lab4 exercise6
-extern void SynchConsoleTest(char*, char*);
+// extern void SynchConsoleTest(char*, char*);//lab5 暂时注释
 
 //----------------------------------------------------------------------
 // main
@@ -133,20 +133,20 @@ int main(int argc, char **argv)
 							   // Nachos will loop forever waiting
 							   // for console input
 		}
-		else if (!strcmp(*argv, "-sct"))
-		{ // test the synchronous console
-			if (argc == 1)
-			{
-				SynchConsoleTest(NULL, NULL);
-			}
-			else
-			{
-				ASSERT(argc > 2);
-				SynchConsoleTest(*(argv + 1), *(argv + 2));
-				argCount = 3;
-			}
-			interrupt->Halt(); 
-		}
+		// else if (!strcmp(*argv, "-sct"))
+		// { // test the synchronous console
+		// 	if (argc == 1)
+		// 	{
+		// 		// SynchConsoleTest(NULL, NULL);//lab5 暂时注释
+		// 	}
+		// 	else
+		// 	{
+		// 		ASSERT(argc > 2);
+		// 		// SynchConsoleTest(*(argv + 1), *(argv + 2));//lab5 暂时注释
+		// 		// argCount = 3;
+		// 	}
+		// 	interrupt->Halt(); 
+		// }
 #endif // USER_PROGRAM
 #ifdef FILESYS
 		if (!strcmp(*argv, "-cp"))

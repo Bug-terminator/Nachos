@@ -99,7 +99,6 @@ BitMap::Find()
 	    Mark(i);
 	    return i;
 	}
-    DEBUG('f',"bit map exceed.\n");
     return -1;
 }
 

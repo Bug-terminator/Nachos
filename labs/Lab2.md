@@ -1,6 +1,4 @@
-# Lab3 虚拟内存
-
-李糖 2001210320
+# Lab2 虚拟内存
 
 ## 任务完成情况
 
@@ -21,7 +19,7 @@
 
 ### 一些值得注意的细节
 
-如果要让Nachos运行用户程序，需要在MakeFile中添加`-DUSER_PROGRAM`。之后，一切的#ifdef USER_PROGRAM范围内的内容都会被编译。system.cc中初始化了一个Machine类型的对象machine，作为Nachos的模拟硬件系统，用来执行用户的程序。Nachos机器模拟的核心部分是内存和寄存器的模拟。
+system.cc中初始化了一个Machine类型的对象machine，作为Nachos的模拟硬件系统，用来执行用户的程序。Nachos机器模拟的核心部分是内存和寄存器的模拟。
 
 nachos寄存器模拟了MIPS机(R2/3000)的全部的32个寄存器，此外还包括8个用于调试的寄存器。一些特殊寄存器描述如下表：
 
@@ -150,7 +148,7 @@ Machine::OneInstruction(Instruction *instr)
 }
 ```
 
-如果Nachos获取指令失败（一般是因为PageFaultException），之后它并不会执行PC+4，因为`machine->ReadMem()`会返回`false`。因此，我们只需要在exceptionHandler中更新tlb，这样Nachos下一次还会执行同一条指令并且再次尝试地址转换。**这一知识点非常重要，我还会在Exercise7中提到它。**
+如果Nachos获取指令失败（一般是因为PageFaultException），之后它并不会执行PC+4，因为`machine->ReadMem()`会返回`false`。因此，我们只需要在exceptionHandler中更新tlb，这样Nachos下一次还会执行同一条指令并且再次尝试地址转换。**这一点非常重要，我还会在Exercise7中提到它。**
 
 ### TLB miss
 
@@ -308,7 +306,7 @@ LRU（Least recently used，最近最少使用）。
 
 ### TLBMissHandler
 
-我的TLBMissHandler(Exercise2中曾提到过）实现如下：
+我的TLBMissHandler实现如下：
 
 ```cpp
 void TLBMissHandler(int virtAddr)
@@ -481,7 +479,7 @@ DEFINES = -DTLB_FIFO
 测试结果如下：
 
 ```cpp
-//LRU r意为rate of tlb hit
+//LRU 
 vagrant@precise32:/vagrant/nachos/nachos-3.4/code/userprog$ ./nachos -d r -x ../test/99table
 LRU : TLB Hit: 3423, Total Visit: 3446, TLB Hit Rate: 99.33%
 Machine halting!

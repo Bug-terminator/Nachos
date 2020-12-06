@@ -25,6 +25,9 @@ CPPFLAGS = $(INCDIR)
 # ASFLAGS =
 # CPPFLAGS = -P $(INCDIR)
 
+#lab5
+#INCPATH = -I../userprog 
+
 PATH = $(GCCDIR):/lib:/usr/bin:/bin
 
 CC = $(GCCDIR)gcc -B../../../gnu-decstation-ultrix/
@@ -35,7 +38,7 @@ CPP = gcc -E
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt shell matmult sort 99table
+all: halt shell matmult sort 99table file_syscall_test user_prog_test
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.c > strt.s
@@ -73,3 +76,17 @@ matmult: matmult.o start.o
 99table: 99table.o start.o
 	$(LD) $(LDFLAGS) start.o 99table.o -o 99table.coff
 	../bin/coff2noff 99table.coff 99table
+
+#lab5 syscall test
+file_syscall_test.o: file_syscall_test.c
+	$(CC) $(CFLAGS) -c file_syscall_test.c
+file_syscall_test: file_syscall_test.o start.o
+	$(LD) $(LDFLAGS) start.o file_syscall_test.o -o file_syscall_test.coff
+	../bin/coff2noff file_syscall_test.coff file_syscall_test
+
+#lab5 userprog test
+user_prog_test.o: user_prog_test.c
+	$(CC) $(CFLAGS) -c user_prog_test.c
+user_prog_test: user_prog_test.o start.o
+	$(LD) $(LDFLAGS) start.o user_prog_test.o -o user_prog_test.coff
+	../bin/coff2noff user_prog_test.coff user_prog_test

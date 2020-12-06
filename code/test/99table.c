@@ -15,5 +15,5 @@ int main()
     for (i = 1; i <= N; ++i)
         for (j = 1; j <= N; ++j)
             table[i - 1][j - 1] = i * j;
-    Exit(table[N - 1][N - 1]);
+    Halt();
 }

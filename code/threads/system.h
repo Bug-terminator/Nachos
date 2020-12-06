@@ -51,10 +51,10 @@ extern Machine *machine; // user program memory and registers
 extern FileSystem *fileSystem;
 // #endif
 
-// #ifdef FILESYS //为了代码补全，暂时注释 lab4
+#ifdef FILESYS //为了代码补全，暂时注释 lab4
 #include "synchdisk.h"
 extern SynchDisk *synchDisk;
-// #endif
+#endif
 
 #ifdef NETWORK
 #include "post.h"
