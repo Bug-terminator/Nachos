@@ -2,9 +2,9 @@
 
 ## 说明
 
-在之前的*lab3*和本次*lab*中的测试结果均使用代码块保存，这是因为测试结果大多比较长，截图不好看。本人郑重承诺所有结果均无篡改情况，本人愿意承担篡改结果的一切后果。每个测试之前都给出了方法，欢迎验证。
+本次*lab*中的测试结果均使用代码块保存，这是因为测试结果比较长，截图不好看。本人郑重承诺所有结果均无篡改情况，并且本人愿意承担篡改结果的一切后果。每个测试之前都给出了方法，欢迎验证。[我的github](https://github.com/Bug-terminator/nachos)
 
-小技巧：在使用*vscode*编辑时，可以先把*main*.*cc*中关于*fileSystem*的*define*全部注释掉，这样可以方便代码补全。举个例子：
+Tips：在使用*vscode*编辑时，可以先把*main*.*cc*中关于*fileSystem*的*define*全部注释掉，这样可以方便代码补全。举个例子：
 
 ```cpp
 //#ifdef FILESYS //暂时注释
@@ -46,7 +46,7 @@
 
 ## 一、文件系统的基本操作
 
-### Exercise 1 源代码阅读
+### *Exercise1* 源代码阅读
 
 > 阅读*Nachos*源代码中与文件系统相关的代码，理解*Nachos*文件系统的工作原理。
 >
@@ -66,9 +66,9 @@
 > +-----------------------------------+
 > |             FileSystem            |
 > +-----------------------------------+
-> |              *OpenFile*             |	 <-memory(*i-node* index)
+> |              OpenFile             |	 ->memory(*i-node* index)
 > +------------+----------+-----------+
-> | File Header| Directory|  Bitmap   |    <-disk(*i-node*)                 
+> | File Header| Directory|  Bitmap   |    ->disk(*i-node*)                 
 > +-----------------------------------+
 > |             SynchDisk             |
 > +-----------------------------------+
@@ -85,16 +85,16 @@ class BitMap
 {
 public:
   BitMap(int nitems); // 初始化一个位图
-  ~BitMap(); // 析构位图
+  ~BitMap();          // 析构位图
 
   void Mark(int which);  // 将第n位设为1
   void Clear(int which); // 将第n位设为0
   bool Test(int which);  // 检查第n位是否为1
   int Find();            // 找第一个值为0的位，并置为1，如果找不到返回-1
-  int NumClear(); // 返回值为0的位数
-  void Print(); // 打印位图信息
-  void FetchFrom(*OpenFile* *file); // 从*Nachos*磁盘读取数据到宿主主机内存
-  void WriteBack(*OpenFile* *file); // 从宿主主机内存写回*Nachos*磁盘
+  int NumClear();        // 返回值为0的位数
+  void Print();          // 打印位图信息
+  void FetchFrom(OpenFile *file); // 从Nachos磁盘读取数据到宿主主机内存
+  void WriteBack(OpenFile *file); // 从宿主主机内存写回Nachos磁盘
 
 private:
   int numBits;       // 位图的位数
@@ -110,7 +110,7 @@ private:
 > 文件头的定义和实现如下所示，由于目前 *Nachos*只支持直接索引，而且文件长度一旦固定， 就不能变动。所以文件头的实现比较简单，这里不再赘述。 
 
 ```cpp
-class *FileHeader*
+class FileHeader
 { //*i-node*
 public:
   bool Allocate(BitMap *bitMap, int fileSize); // 通过文件大小初始化*i-node*（新）
@@ -134,18 +134,18 @@ private:
 > 该模块定义了一个打开文件控制结构。当用户打开了一个文件时，系统即为其产生一个打开文件控制结构，以后用户对该文件的访问都可以通过该结构。打开文件控制结构中的对文件操作的方法同 *UNIX* 操作系统中的系统调用。 
 
 ```cpp
-class *OpenFile* {
+class OpenFile {
   public:
-    *OpenFile*(int sector);		// 打开文件初始化方法，sector为文件头*i-node*的扇区号
-    ~*OpenFile*();			    // 关闭文件
-    void Seek(int position); 		// 移动文件位置指针（从头文件开始）
-    int Read(char *into, int numBytes); // 从文件中读入into缓冲
-    int Write(char *from, int numBytes); //从from缓冲写入文件
-    int ReadAt(char *into, int numBytes, int position);//从文件position开始读
-    int WriteAt(char *from, int numBytes, int position);//写入文件position开始的位置
-    int Length(); 			// 返回文件长度
+    OpenFile(int sector);		// 打开文件初始化方法，sector为文件头*i-node*的扇区号
+    ~OpenFile();			    // 关闭文件
+    void Seek(int position); 		                     // 移动文件位置指针（从头文件开始）
+    int Read(char *into, int numBytes);                  // 从文件中读入into缓冲
+    int Write(char *from, int numBytes);                 //从from缓冲写入文件
+    int ReadAt(char *into, int numBytes, int position);  //从文件position开始读
+    int WriteAt(char *from, int numBytes, int position); //写入文件position开始的位置
+    int Length(); 			                             // 返回文件长度
   private:
-    *FileHeader* *hdr;			// 该文件对应的文件头*i-node*（建立关系）
+    FileHeader *hdr;			// 该文件对应的文件头*i-node*（建立关系）
     int seekPosition;			// 当前文件位置指针
 };
 ```
@@ -160,8 +160,8 @@ class Directory
 public:
   Directory(int size); // 初始化一张空目录，size规定了目录中存放文件个数
   ~Directory();        // 析构目录
-  void FetchFrom(*OpenFile* *file); // 从目录*i-node*中读入目录内容到内存
-  void WriteBack(*OpenFile* *file); // 将该目录内容从内存写回目录*i-node*
+  void FetchFrom(OpenFile *file); // 从目录*i-node*中读入目录内容到内存
+  void WriteBack(OpenFile *file); // 将该目录内容从内存写回目录*i-node*
   int Find(char *name); // 在目录中找文件名，返回文件的*i-node*的物理位置
   bool Add(char *name, int newSector); // 在目录中添加一个文件
   bool Remove(char *name); // 从目录中移除一个文件
@@ -184,18 +184,18 @@ class FileSystem
 {
 public:
 	FileSystem(bool format);				  // 初始化文件系统
-	bool *Create*(char *name, int initialSize); // 创造文件
-	*OpenFile* *Open(char *name);				  // 打开文件
+	bool Create(char *name, int initialSize); // 创造文件
+	OpenFile *Open(char *name);				  // 打开文件
 	bool Remove(char *name);				  // 删除文件
 	void List();							  // 打印文件系统中的所有文件
 	void Print();							  //详细列出文件和内容
 private:
-	*OpenFile* *freeMapFile;	 // 文件系统位图
-	*OpenFile* *directoryFile; // 文件系统根目录
+	OpenFile *freeMapFile;	 // 文件系统位图
+	OpenFile *directoryFile; // 文件系统根目录
 };
 ```
 
-### Exercise 2 扩展文件属性
+### *Exercise2* 扩展文件属性
 
 > 增加文件描述信息，如“类型”、“创建时间”、“上次访问时间”、“上次修改时间”、“路径”等等。尝试突破文件名长度的限制。
 
@@ -230,7 +230,7 @@ private:
 *Nachos*的*file* *header*等价于*UNIX*中的*i-node*，因此我将题述的几个变量加在*code*/*filesys*/*filehdr*.*h*的*FileHeader*类中，并调用*c*语言库*time.h*来获取时间。
 
 ```cpp
-class *FileHeader*
+class FileHeader
 {
   ...
 private:
@@ -251,9 +251,9 @@ private:
 //----------------------------------------------------------------------
 //Lab4 exercise2 新增成员变量
 //----------------------------------------------------------------------
-#define VAR_NUM  8//*i-node*中的变量数，变量的均占4B(int, char *), *i-node*中共8个变量，所以为8
-#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // *i-node*中索引表大小,值为                                                                                    //（128 -  4*8）/4 = 24
-#define MaxFileSize (NumDirect * SectorSize) //文件最大长度 24 * 128 = 3072B
+#define VAR_NUM  8                                                     // *i-node*中共8个变量
+#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // *i-node*中索引表大小,值为24           
+#define MaxFileSize (NumDirect * SectorSize)                           //文件最大长度 24 * 128 = 3072B
 ```
 
 #### 维护成员变量						
@@ -412,7 +412,7 @@ This is the spring of our discontent.\a
 
 成功添加文件属性，成功突破文件名长度为*10*的限制，成功完成*exercise2*。
 
-### Exercise 3 扩展文件长度
+### *Exercise3* 扩展文件长度
 
 > 改直接索引为间接索引，以突破文件长度不能超过*4KB*的限制。
 
@@ -666,11 +666,11 @@ Directory contents:
 
 #### 结论
 
-结果显示，系统为*123K*的大文件分配了*1022*块磁盘，证明*Allocate()*实现正确。在删除大文件之后，*bitMap*恢复到之前的状态，证明*DeAllocate*()实现正确。全程没有出错，证明*ByteToSector()*实现正确，因为整个过程都会调用*writeAt*和*readAt*来对文件进行读写，而这二者都会调用*ByteToSector()*。
+结果显示，系统为*123K*的大文件分配了*1022*块磁盘，证明*Allocate()*实现正确。在删除大文件之后，*bitMap*恢复到之前的状态，证明*DeAllocate*()实现正确。全程没有出错，证明*ByteToSector()*实现正确，因为整个过程都会调用*writeAt*()和*readAt*()来对文件进行读写，而这二者都会调用*ByteToSector()*。
 
 结论：成功实现多级索引（最高二级），并且能够表示*Nachos*物理磁盘的最大容量。
 
-### Exercise 4 实现多级目录
+### *Exercise4* 实现多级目录
 
 #### 准备工作
 
@@ -730,7 +730,7 @@ public:
 
 > 因为目前还没有实现shell，所以暂时只实现'/',并且每次的查找都只能从*root*开始，所以需要我们输入绝对路径
 >
-> - e.g.
+> - *e.g.*
 >   - */etc/sysconfig/network* 
 >   - */var/log/rpmpkgs* 
 >   - */etc/rc.d/init.d*
@@ -1071,21 +1071,21 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 
 当前的*Remove*()只能对文件本身进行删除，如果我们想删除*/var/log/rpmpkgs*下的*log*，我们能先删除*rpmpkgs*，再删除*log*。所以我们应该对此进行改进，使得可以递归地删除*log*和它的所有子文件夹(*todo*)。
 
-增加./和../（*todo*）
+增加"./"和"../"（*todo*）
 
 将*Nachos*目录数组改为动态数组，突破目录项限制（*todo*）
 
-### Exercise 5 动态调整文件长度
+### *Exercise5* 动态调整文件长度
 
 > 对文件的创建操作和写入操作进行适当修改，以使其符合实习要求。 
 
  目前*Nachos*文件是在一开始就分配好长度的，一旦分配，不可改变。这就导致了一些问题，比如在调用*OpenFile::writeAt()*的时候，如果写入的内容超出文件范围，那么就会报错；而如果我给某个文件分配了很多空间，而实际只用了一小部分，就会导致大量的空间浪费。因为实际中我们不可能每次都知道文件究竟会有多大，所以实现文件长度的动态调整是非常有必要的。
 
-在*filehdr.cc*中新增成员函数*expandFile*，该函数在原理上与*exercise3*中的*Allocate*非常相似，它们的区别就在于：
+在*filehdr.cc*中新增成员函数*expandFile*()，该函数在原理上与*exercise3*中的*Allocate*()非常相似，它们的区别就在于：
 
-1. *Allocate*每次从*0*开始，而*expandFile*从*numSectors*(接着上一次的结尾开始）。
-2. *Allocate*每次都需要创建新的*singleBuffer*和*doubleBuffer*（一/二级索引表），而*expandFile*可能会对已有的*singleBuffer*/*doubleBuffer*进行操作。
-3. 准确地说，*Allocate*是*expandFile*的一种特殊情况。
+1. *Allocate*()每次从*0*开始，而*expandFile*()从*numSectors*(接着上一次的结尾开始）。
+2. *Allocate*()每次都需要创建新的*singleBuffer*和*doubleBuffer*（一/二级索引表），而*expandFile*()可能会对已有的*singleBuffer*/*doubleBuffer*进行操作。
+3. 准确地说，*Allocate*()是*expandFile*()的一种特殊情况。
 
 ```cpp
 //----------------------------------------------------------------------
@@ -1266,7 +1266,7 @@ Network I/O: packets received 0, sent 0
 
 ## **二、文件访问的同步与互斥**
 
-### Exercise 6 源代码阅读
+### *Exercise6* 源代码阅读
 
 > a)    阅读*Nachos*源代码中与异步磁盘相关的代码，理解*Nachos*系统中异步访问模拟磁盘的工作原理。
 >
@@ -1274,7 +1274,7 @@ Network I/O: packets received 0, sent 0
 >
 > b)    利用异步访问模拟磁盘的工作原理，在*Class Console*的基础上，实现*Class SynchConsole*。
 
-#### synchdisk.cc synchdisk.h
+#### *synchdisk.cc synchdisk.h*
 
 > 和其它设备一样，*Nachos* 模拟的磁盘是异步设备。当发出访问磁盘的请求后立刻返回，当从磁盘读出或写入数据结束后，发出磁盘中断，说明一次磁盘访问真正结束。
 >
@@ -1314,7 +1314,7 @@ void SynchDisk::ReadSector(int sectorNumber, char *data)
 
 > 当线程向磁盘设备发出读访问请求后，等待磁盘中断的到来。一旦磁盘中断来到，中断处理程序执行*semaphore->V()*操作，*ReadSector*得以继续运行。对磁盘同步写也基于同样的原理。
 
-#### 实现Class SynchConsole
+#### 实现*Class SynchConsole*
 
 > *Nachos*的终端操作有严格的工作顺序，对读终端来说： *CheckCharAvail -> GetChar -> CheckCharAvail -> GetChar ->...* 系统通过定期的读终端中断来判断终端是否有内容供读取，如果有则读出；如果没有，下一 次读终端中断继续判断。读出的内容将一直保留到 *GetChar* 将其读走。 对写终端来说： *PutChar -> WriteDone -> PutChar -> WriteDone -> ...* 系统发出一个写终端命令 *PutChar*，模拟系统将直接向终端输出文件写入要写的内容，但是 对 *Nachos* 来说，整个写的过程并没有结束，只有当写终端中断来到后整个写过程才算结束。
 
@@ -1455,7 +1455,7 @@ wodemuqMachine halting!
 
 结果显示，在单线程下同步控制台能够正常工作，还没有测试多线程下的正确性(*todo*）。
 
-### Exercise 7 实现文件系统的同步互斥访问机制，达到如下效果：
+### *Exercise7* 实现文件系统的同步互斥访问机制，达到如下效果：
 
 > a)    一个文件可以同时被多个线程访问。且每个线程独自打开文件，独自拥有一个当前文件访问位置，彼此间不会互相干扰。
 >
@@ -1542,21 +1542,21 @@ if(synchDisk->thraedsPerFile[sector])
     return FALSE;
 ```
 
-## 三、Challenges （至少选做1个）
+## 三、*Challenges* （至少选做*1*个）
 
-### Challenge 1  性能优化
+### *Challenge1*  性能优化
 
 > a)    例如，为了优化寻道时间和旋转延迟时间，可以将同一文件的数据块放置在磁盘同一磁道上
 >
 > b)    使用*cache*机制减少磁盘访问次数，例如延迟写和预读取。
 
-### Challenge 2 实现pipe机制
+### *Challenge2* 实现*pipe*机制
 
 > 重定向*OpenFile*的输入输出方式，使得前一进程从控制台读入数据并输出至管道，后一进程从管道读入数据并输出至控制台。
 
 ## 困难&解决
 
-### segmentation fault
+### *segmentation fault*
 
 突破文件名长度限制：将文件名从*char*[]改为*char*\*，之后会报错*segmentation* *fault*，这是因为*FileHeader*中使用了*strncmp*()函数和*strncpy*()函数，需要将它们分别改为*strcmp*和*table[i].name = name*。
 
@@ -1564,7 +1564,7 @@ if(synchDisk->thraedsPerFile[sector])
 >
 >不过最终我还是采用了*char*[]来存储文件名，原因在之前*exercise2*中的反思有说过。
 
-### 160 - 54 = 170?
+### *160 - 54 = 170?*
 
 在*exercise3* *debug*的时候我写了如下代码：
 
@@ -1585,7 +1585,7 @@ numSectors = 160, NUMFIRST = 54, numSectors - NUMFIRST = 170,numSectors = 160, N
 #define NUMFIRST (NUMDIRECT + SECPERIND)//正确
 ```
 
-### Assertion failed: line 123, file "../machine/disk.cc"
+### *Assertion failed: line 123, file "../machine/disk.cc"*
 
 在*exercise3*中将大文件*copy*进*Nachos*会报错。
 
@@ -1606,7 +1606,7 @@ Disk::ReadRequest(int sectorNumber, char* data)
 }
 ```
 
-我打印了一下这个值，为`-1219460751`，错误应该发生在某个调用它的函数中。而调用*ReadRequest*的函数只有*SynchDisk::ReadSector*，找出所有调用ReadSector的地方，发现全部位于*filehdr.cc*中，还有一处位于*OpenFile.cc::ReadAt()*中，而这个函数会反过来调用*filehdr.cc::ByteToSector()*,因此我们不仅在每一个*ReadSector*函数进入之前，判断一下传入的参数的值，还需要在*filehdr.cc::ByteToSector() return*的地方也需要判断一下*return*的值，如果小于零，则打印一下。最后找到*bug*：
+我打印了一下这个值，为-*1219460751*，错误应该发生在某个调用它的函数中。而调用*ReadRequest*的函数只有*SynchDisk::ReadSector*，找出所有调用ReadSector的地方，发现全部位于*filehdr.cc*中，还有一处位于*OpenFile.cc::ReadAt()*中，而这个函数会反过来调用*filehdr.cc::ByteToSector()*,因此我们不仅在每一个*ReadSector*函数进入之前，判断一下传入的参数的值，还需要在*filehdr.cc::ByteToSector() return*的地方也需要判断一下*return*的值，如果小于零，则打印一下。最后找到*bug*：
 
 ```cpp
 int FileHeader::ByteToSector(int offset)
@@ -1631,14 +1631,14 @@ Generate the large file for double indirect indexing
 123+0 records out
 125952 bytes (126 kB) copied, 0.033861 s, 3.7 MB/s
 === format the DISK ===
-=== copies file "largeFile" from *UNIX* to *Nachos* ===
+=== copies file "largeFile" from UNIX to Nachos ===
 === prints the contents of the entire file system ===
 Bit map file header:
 ```
 
 没有再报错了，其他与*exercise3*中的结果一致。
 
-### Perf test: unable to write TestFile
+### *Perf test: unable to write TestFile*
 
 在做exercise5的时候，每次执行*./Nachos -d f -t*都会报错*Perf test: unable to write TestFile*,审查源代码：
 
@@ -1653,7 +1653,7 @@ FileWrite()
         if (numBytes < 10)
         {
             printf("Perf test: unable to write %s\n", FileName);
-            delete *OpenFile*;
+            delete OpenFile;
             return;
         }
     }
