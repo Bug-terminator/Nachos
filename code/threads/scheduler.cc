@@ -52,7 +52,7 @@ Scheduler::~Scheduler()
 
 // void Scheduler::ReadyToRun(Thread *thread)
 // {
-//     DEBUG('t', "Putting thread %s on ready list.\n", thread->getName());
+    // DEBUG('t', "Putting thread %s on ready list.\n", thread->getName());
 //     //先把thread按照优先级插入队列
 //     cout << "putting thread " << thread->getTID() << " on readyList." << endl;
 //     thread->setStatus(READY);
@@ -69,7 +69,7 @@ Scheduler::~Scheduler()
 void
 Scheduler::ReadyToRun (Thread *thread)
 {
-    DEBUG('t', "Putting thread %s on ready list.\n", thread->getName());
+    // DEBUG('t', "Putting thread %s on ready list.\n", thread->getName());//lab6暂时注释
 
     thread->setStatus(READY);
     readyList->Append((void *)thread);

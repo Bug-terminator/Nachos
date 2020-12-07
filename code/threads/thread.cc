@@ -99,7 +99,7 @@ Thread::Thread(char *threadName, int pr)
 
 Thread::~Thread()
 {
-    DEBUG('t', "Deleting thread \"%s\"\n", name);
+    // DEBUG('t', "Deleting thread \"%s\"\n", name);lab6暂时注释
 
     threadPtr[tID] = NULL;
     isAllocatable[tID] = true;
@@ -192,7 +192,7 @@ void Thread::Finish()
     (void)interrupt->SetLevel(IntOff);
     ASSERT(this == currentThread);
 
-    DEBUG('t', "Finishing thread \"%s\"\n", getName());
+    // DEBUG('t', "Finishing thread \"%s\"\n", getName());lab6暂时注释
 
     threadToBeDestroyed = currentThread;
     Sleep(); // invokes SWITCH
@@ -224,7 +224,7 @@ void Thread::Yield()
 
     ASSERT(this == currentThread);
 
-    DEBUG('t', "Yielding thread \"%s\"\n", getName());
+    // DEBUG('t', "Yielding thread \"%s\"\n", getName());//lab6暂时注释
     nextThread = scheduler->FindNextToRun();
     
     if (nextThread != NULL)
@@ -264,7 +264,7 @@ void Thread::Sleep()
     ASSERT(this == currentThread);
     ASSERT(interrupt->getLevel() == IntOff);
 
-    DEBUG('t', "Sleeping thread \"%s\"\n", getName());
+    // DEBUG('t', "Sleeping thread \"%s\"\n", getName());lab6暂时注释
 
     status = BLOCKED;
     while ((nextThread = scheduler->FindNextToRun()) == NULL)

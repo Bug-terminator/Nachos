@@ -239,81 +239,84 @@ void FileSystemHandler(int type)
         cout << "Success read " << numByte << "bytes from file ID " << (OpenFileId)openFile << endl;
     }
     else if (type == SC_Write)
-    {                                                                    // void Write(char *buffer, int size, OpenFileId id);
+    {
+        currentThread->SaveUserState();                                  // void Write(char *buffer, int size, OpenFileId id);
         int addr = machine->ReadRegister(4);                             // memory starting position
         int size = machine->ReadRegister(5);                             // read "size" bytes
         OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);       // OpenFile object ptr
         int numByte = openFile->Write(&machine->mainMemory[addr], size); //write to file
         cout << "Success write " << numByte << "bytes to file ID" << (OpenFileId)openFile << endl;
+        currentThread->RestoreUserState();
     }
 }
 
-//----------------------------------------------------------------------
-//  UserProgHandler
-// 	Handling user program related system call.
-//----------------------------------------------------------------------
-void exec_func(int addr) //mainMemory start positon
+//=================lab5 exercise4==================
+//=================lab5 exercise4==================
+//=================lab5 exercise4==================
+//=================lab5 exercise4==================
+//helper function to call by Fork()
+void exec_helper(int addr) //mainMemory start positon
 {
     char *name = getNameFromNachosMemory(addr);
     OpenFile *executable = fileSystem->Open(name);
     AddrSpace *space = new AddrSpace(executable);
-    delete executable;
     currentThread->space = space;
-    space->InitRegisters();//
+    delete[] name;
+    delete executable;
+    space->InitRegisters();
     space->RestoreState();
     machine->Run();
     ASSERT(FALSE); //never return
 }
-
-void fork_func(int arg)
+//helper function to call by Fork()
+void fork_helper(int arg)
 {
-    // currentThread->space->InitRegisters(); //初始化寄存器
+    currentThread->space->InitRegisters(); //初始化寄存器
     currentThread->space->RestoreState();  //继承父进程的页表
-    // Set PC to *arg*
-    machine->WriteRegister(PCReg, arg);//从函数处开始执行
+    machine->WriteRegister(PCReg, arg);    //从函数处开始执行
     machine->WriteRegister(NextPCReg, arg + 4);
     machine->Run();
 }
-
+//----------------------------------------------------------------------
+//  UserProgHandler
+// 	Handling user program related system call.
+//----------------------------------------------------------------------
 void UserProgHandler(int type)
 {
     if (type == SC_Exec)
     {
         int addr = machine->ReadRegister(4);
         Thread *thread = new Thread("exec_thread");
-        thread->Fork(exec_func, addr);
-        machine->WriteRegister(2, (SpaceId)thread);
+        thread->Fork(exec_helper, addr);
+        machine->WriteRegister(2, (SpaceId)thread->getTID());
         machine->advancePC();
     }
     else if (type == SC_Fork)
     {
-        // currentThread->SaveUserState(); // Save Registers
         int funcAddr = machine->ReadRegister(4);
         // Create a new thread in the same addrspace
         Thread *thread = new Thread("fork_thread");
         thread->space = currentThread->space;
-        // thread->RestoreUserState();
-        thread->Fork(fork_func, funcAddr);
-        // currentThread->RestoreUserState(); // restore Registers
+        thread->Fork(fork_helper, funcAddr);
         machine->advancePC();
     }
     else if (type == SC_Yield)
     {
-        machine->advancePC(); //先增加pc，否则死循环
         currentThread->Yield();
+        machine->advancePC();
     }
     else if (type == SC_Exit)
     {
         int status = machine->ReadRegister(4);
-        printf("program exist with status %d.\n", status);
+        printf("%s exists with status %d.\n", currentThread->getName(), status);
         machine->bitmap->freeMem(); //释放位图
-        machine->advancePC();       //先增加pc，否则死循环
+        machine->advancePC();
         currentThread->Finish();
     }
     else if (type == SC_Join)
     {
-        Thread *thread = (Thread *)machine->ReadRegister(4);
-        while (thread)
+        int threadID = machine->ReadRegister(4);
+        while (!isAllocatable[threadID])
             currentThread->Yield();
         machine->advancePC();
     }
@@ -340,7 +343,6 @@ void ExceptionHandler(ExceptionType which)
         else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
         {
             FileSystemHandler(type);
-            // Increment the Program Counter before returning.
             machine->advancePC();
         }
     }

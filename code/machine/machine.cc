@@ -87,7 +87,7 @@ void bitMap::freeMem(void)
         }
     }
     DEBUG('p', "After freed, ");
-    machine->bitmap->printBitMap();
+    // machine->bitmap->printBitMap();
 }
 
 static void CheckEndian()

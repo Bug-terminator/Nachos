@@ -12,5 +12,5 @@ int main()
     Write(buffer, numBytes, fileID2);            //再从buffer中写入file2中
     Close(fileID1);                              //关闭两个文件
     Close(fileID2);
-    Halt();
+    Exit(0);
 }
