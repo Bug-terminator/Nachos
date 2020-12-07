@@ -122,20 +122,26 @@ int Join(SpaceId id);      //等待标识符为id的用户线程执行完毕，�
 
 #### 系统调用流程
 
->*machine*的*Run*函数运行用户程序，实现在*machine*/*mipssim*.cc，基本流程是通过*OneInstruction*函数完成指令译码和执行，通过*interrupt*->*OneTick*函数使得时钟前进 
->（1）*OneInstruction*函数判断当前指令是系统调用，转入*start*.*s* 
->（2）通过start.s确定系统调用入口，通过寄存器r2传递系统调用号，转入*exception*.cc（此时系统调用参数位于相应寄存器） 
->（3）*exception*.cc通过系统调用号识别系统调用，进行相关处理，如果系统调用存在返回值，那么通过寄存器r2传递，流程结束时，需要更新*PC* <br>（4）系统调用结束，程序继续执行
+>*machine*的*Run*函数运行用户程序，实现在*machine*/*mipssim*.cc，基本流程是通过*OneInstruction*函数完成指令译码和执行，通过*interrupt*->*OneTick*函数使得时钟前进：
+>
+>1. *OneInstruction*函数判断当前指令是系统调用，转入*start*.*s* 
+>2. 通过start.s确定系统调用入口，通过寄存器r2传递系统调用号，转入*exception*.cc（此时系统调用参数位于相应寄存器） 
+>3. *exception*.cc通过系统调用号识别系统调用，进行相关处理，如果系统调用存在返回值，那么通过寄存器r2传递，流程结束时，需要更新*PC* 
+>4. 系统调用结束，程序继续执行
 
 #### 添加系统调用
 
-> （1）*syscfall*.h定义系统调用接口、系统调用号 <br>（2）*code*/*test*/*start*.s添加链接代码 <br>（3）*exception*.cc添加系统调用处理过程 
+> 1. *syscfall*.h定义系统调用接口、系统调用号 
+> 2. *code*/*test*/*start*.s添加链接代码 
+> 3. *exception*.cc添加系统调用处理过程 
 
 ## **二、文件系统相关的系统调用**
 
 ### *Exercise2* 系统调用实现
 
-> 类比*Halt*的实现，完成与文件系统相关的系统调用：*Create*, *Open*，*Close*，*Write*，*Read*。*Syscall*.*h*文件中有这些系统调用基本说明。
+> 类比*Halt*的实现，完成与文件系统相关的系统调用：*Create*, *Open*，*Close*，*Write*，*Read*。
+>
+> *Syscall*.*h*文件中有这些系统调用基本说明。
 
 为此我专门写了一个函数*FileSystemHandler*来处理文件系统系统调用:
 
