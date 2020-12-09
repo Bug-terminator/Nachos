@@ -1,6 +1,6 @@
 # Lab5 系统调用
 
-##### 李糖 2001210320
+李糖 2001210320
 
 ## 任务完成情况
 
@@ -34,17 +34,17 @@
 
 ```cpp
 //定义系统调用号
-#define SC_Halt 0
-#define SC_Exit 1
-#define SC_Exec 2
-#define SC_Join 3
+#define SC_Halt   0
+#define SC_Exit   1
+#define SC_Exec   2
+#define SC_Join   3
 #define SC_Create 4
-#define SC_Open 5
-#define SC_Read 6
-#define SC_Write 7
-#define SC_Close 8
-#define SC_Fork 9
-#define SC_Yield 10
+#define SC_Open   5
+#define SC_Read   6
+#define SC_Write  7
+#define SC_Close  8
+#define SC_Fork   9
+#define SC_Yield  10
 
 //文件系统相关，5个：
 void Create(char *name);                           //创建名为name的文件
@@ -704,7 +704,9 @@ delete[] name;
 
 ## 收获&感想
 
-搞清楚每个变量到底是在*Nachos*内存，还是在宿主主机内存。这关系到是使用辅助函数还是直接使用强制类型转换。
+本次lab的难度文件系统相比还是比较简单的，最关键的就是搞清楚每个变量到底是在*Nachos*内存，还是在宿主主机内存。这关系到是使用辅助函数还是直接使用强制类型转换。
+
+
 
 ## 参考文献
 

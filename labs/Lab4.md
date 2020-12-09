@@ -4,7 +4,7 @@
 
 本次*lab*中的测试结果均使用代码块保存，这是因为测试结果比较长，截图不好看。本人郑重承诺所有结果均无篡改情况，并且本人愿意承担篡改结果的一切后果。每个测试之前都给出了方法，欢迎验证。[我的github](https://github.com/Bug-terminator/nachos)
 
-Tips：在使用*vscode*编辑时，可以先把*main*.*cc*中关于*fileSystem*的*define*全部注释掉，这样可以方便代码补全。举个例子：
+*Tips*：在使用*vscode*编辑时，可以先把*main*.*cc*中关于*fileSystem*的*define*全部注释掉，这样可以方便代码补全。举个例子：
 
 ```cpp
 //#ifdef FILESYS //暂时注释
@@ -84,22 +84,22 @@ Tips：在使用*vscode*编辑时，可以先把*main*.*cc*中关于*fileSystem*
 class BitMap
 {
 public:
-  BitMap(int nitems); // 初始化一个位图
-  ~BitMap();          // 析构位图
+    BitMap(int nitems); // 初始化一个位图
+    ~BitMap();          // 析构位图
 
-  void Mark(int which);  // 将第n位设为1
-  void Clear(int which); // 将第n位设为0
-  bool Test(int which);  // 检查第n位是否为1
-  int Find();            // 找第一个值为0的位，并置为1，如果找不到返回-1
-  int NumClear();        // 返回值为0的位数
-  void Print();          // 打印位图信息
-  void FetchFrom(OpenFile *file); // 从Nachos磁盘读取数据到宿主主机内存
-  void WriteBack(OpenFile *file); // 从宿主主机内存写回Nachos磁盘
+    void Mark(int which);           // 将第n位设为1
+    void Clear(int which);          // 将第n位设为0
+    bool Test(int which);           // 检查第n位是否为1
+    int Find();                     // 找第一个值为0的位，并置为1，如果找不到返回-1
+    int NumClear();                 // 返回值为0的位数
+    void Print();                   // 打印位图信息
+    void FetchFrom(OpenFile *file); // 从Nachos磁盘读取数据到宿主主机内存
+    void WriteBack(OpenFile *file); // 从宿主主机内存写回Nachos磁盘
 
 private:
-  int numBits;       // 位图的位数
-  int numWords;      // 位图的字节数
-  unsigned int *map; // bit以unsigned int的数据类型存储，这是bitmap的起点指针
+    int numBits;       // 位图的位数
+    int numWords;      // 位图的字节数
+    unsigned int *map; // bit以unsigned int的数据类型存储，这是bitmap的起点指针
 };
 ```
 
@@ -134,19 +134,20 @@ private:
 > 该模块定义了一个打开文件控制结构。当用户打开了一个文件时，系统即为其产生一个打开文件控制结构，以后用户对该文件的访问都可以通过该结构。打开文件控制结构中的对文件操作的方法同 *UNIX* 操作系统中的系统调用。 
 
 ```cpp
-class OpenFile {
-  public:
-    OpenFile(int sector);		// 打开文件初始化方法，sector为文件头*i-node*的扇区号
-    ~OpenFile();			    // 关闭文件
-    void Seek(int position); 		                     // 移动文件位置指针（从头文件开始）
+class OpenFile
+{
+public:
+    OpenFile(int sector);                                // 打开文件初始化方法，sector为文件头*i-node*的扇区号
+    ~OpenFile();                                         // 关闭文件
+    void Seek(int position);                             // 移动文件位置指针（从头文件开始）
     int Read(char *into, int numBytes);                  // 从文件中读入into缓冲
     int Write(char *from, int numBytes);                 //从from缓冲写入文件
     int ReadAt(char *into, int numBytes, int position);  //从文件position开始读
     int WriteAt(char *from, int numBytes, int position); //写入文件position开始的位置
-    int Length(); 			                             // 返回文件长度
-  private:
-    FileHeader *hdr;			// 该文件对应的文件头*i-node*（建立关系）
-    int seekPosition;			// 当前文件位置指针
+    int Length();                                        // 返回文件长度
+private:
+    FileHeader *hdr;  // 该文件对应的文件头*i-node*（建立关系）
+    int seekPosition; // 当前文件位置指针
 };
 ```
 
@@ -158,21 +159,20 @@ class OpenFile {
 class Directory
 {
 public:
-  Directory(int size); // 初始化一张空目录，size规定了目录中存放文件个数
-  ~Directory();        // 析构目录
-  void FetchFrom(OpenFile *file); // 从目录*i-node*中读入目录内容到内存
-  void WriteBack(OpenFile *file); // 将该目录内容从内存写回目录*i-node*
-  int Find(char *name); // 在目录中找文件名，返回文件的*i-node*的物理位置
-  bool Add(char *name, int newSector); // 在目录中添加一个文件
-  bool Remove(char *name); // 从目录中移除一个文件
-  void List();  // 打印目录信息
-  void Print(); // 详细打印目录信息
+    Directory(int size);                 // 初始化一张空目录，size规定了目录中存放文件个数
+    ~Directory();                        // 析构目录
+    void FetchFrom(OpenFile *file);      // 从目录*i-node*中读入目录内容到内存
+    void WriteBack(OpenFile *file);      // 将该目录内容从内存写回目录*i-node*
+    int Find(char *name);                // 在目录中找文件名，返回文件的*i-node*的物理位置
+    bool Add(char *name, int newSector); // 在目录中添加一个文件
+    bool Remove(char *name);             // 从目录中移除一个文件
+    void List();                         // 打印目录信息
+    void Print();                        // 详细打印目录信息
 private:
-  int tableSize;         // 目录项数
-  DirectoryEntry *table; // 目录项表
-  int FindIndex(char *name); // 根据文件名找出该文件在目录中的序号
+    int tableSize;             // 目录项数
+    DirectoryEntry *table;     // 目录项表
+    int FindIndex(char *name); // 根据文件名找出该文件在目录中的序号
 };
-
 ```
 
 #### *filesys.cc filesys.h*
@@ -183,15 +183,15 @@ private:
 class FileSystem
 {
 public:
-	FileSystem(bool format);				  // 初始化文件系统
-	bool Create(char *name, int initialSize); // 创造文件
-	OpenFile *Open(char *name);				  // 打开文件
-	bool Remove(char *name);				  // 删除文件
-	void List();							  // 打印文件系统中的所有文件
-	void Print();							  //详细列出文件和内容
+    FileSystem(bool format);                  // 初始化文件系统
+    bool Create(char *name, int initialSize); // 创造文件
+    OpenFile *Open(char *name);               // 打开文件
+    bool Remove(char *name);                  // 删除文件
+    void List();                              // 打印文件系统中的所有文件
+    void Print();                             //详细列出文件和内容
 private:
-	OpenFile *freeMapFile;	 // 文件系统位图
-	OpenFile *directoryFile; // 文件系统根目录
+    OpenFile *freeMapFile;   // 文件系统位图
+    OpenFile *directoryFile; // 文件系统根目录
 };
 ```
 
@@ -252,34 +252,30 @@ private:
 //Lab4 exercise2 新增成员变量
 //----------------------------------------------------------------------
 #define VAR_NUM  8                                                     // *i-node*中共8个变量
-#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // *i-node*中索引表大小,值为24           
+#define NumDirect ((SectorSize - VAR_NUM * sizeof(int)) / sizeof(int)) // *i-node*中索引表大小,值为24         
 #define MaxFileSize (NumDirect * SectorSize)                           //文件最大长度 24 * 128 = 3072B
 ```
 
 #### 维护成员变量						
 
-*Nachos*文件通过code/filesys/filesys.cc中的*Create*函数创建，创建文件会调用*FileHeader*::*Allocate*()函数初始化一个*i-node*，应该在此函数内部增加对*CreateTime*的维护。每次通过*OpenFile*访问文件，在读时需要对*lastVisitedTime*进行更新，在写时需要对*lastModifiedTime*进行更新，并且需要在*OpenFile*的析构函数中加入将*hdr*写回磁盘的语句。
+*Nachos*文件通过*code/filesys/filesys.cc*中的*Create*函数创建，创建文件会调用*FileHeader*::*Allocate*()函数初始化一个*i-node*，应该在此函数内部增加对*CreateTime*的维护。每次通过*OpenFile*访问文件，在读时需要对*lastVisitedTime*进行更新，在写时需要对*lastModifiedTime*进行更新，并且需要在*OpenFile*的析构函数中加入将*hdr*写回磁盘的语句。
 
 ```cpp
 int OpenFil*::ReadAt(char *into, int numBytes, int position)
 {
-    //lab4 exercise2
     hdr->SetlastVisitedTime();
     return numBytes;
 }
 
 int OpenFile::WriteAt(char *from, int numBytes, int position)
 {
-    //lab4 exercise2
     hdr->SetlastModifiedTime();
     hdr->SetlastVisitedTime();
-    // synchDisk->rwLock[hdr->GetInodeSector()]->WriterRelease();
     return numBytes;
 }
 
 OpenFile::~OpenFile()
 {
-    //lab4 exercise2
     hdr->WriteBack(hdr->GetInodeSector());
     delete hdr;
 }
@@ -291,7 +287,7 @@ OpenFile::~OpenFile()
 
 #### 突破文件名长度的限制
 
-将*char[]*改为*char* \* ，并修改*ADD()*和*FindIndex()*函数中的*strncmp()*和*strncpy()*函数即可。
+将*char*[]改为*char* \* ，并修改*ADD()*和*FindIndex()*函数中的*strncmp()*和*strncpy()*函数即可。
 
 #### 反思
 
@@ -299,12 +295,12 @@ OpenFile::~OpenFile()
 >
 > [深入 char * ,char ** ,char a[] ,char *a[] 内核-CSDN](https://blog.csdn.net/daiyutage/article/details/8604720)
 
-*Linux*中文件名的存储方式为*char[]*,这引起了我的反思。为什么放着空间更小，表达长度更多的的*char* \*不用，要选择固定长度的，占空间更大的*char[]*？因为*char*表示的内存在主机关机之后会被回收，下一次开机，用同样的内存地址去寻找必然导致出错。而且在*exercise3*中，使用*char*\*的变量都出现了乱码，*difrectory*中*print*时会报*segmentation* *fault*。
+*Linux*中文件名的存储方式为*char*[],这引起了我的反思。为什么放着空间更小，表达长度更多的的*char* \*不用，要选择固定长度的，占空间更大的*char*[]？因为*char* \*表示的内存会被回收，下一次用同样的内存地址去寻找必然导致出错。而且在*exercise3*中，使用*char* \*的变量都出现了乱码，并报错*segmentation* *fault*。
 
 ```cpp
-*Create*d: KSt10moneypunctIcLb1EE13negative_signEv
+Created: KSt10moneypunctIcLb1EE13negative_signEv
 Modified: KSt10moneypunctIcLb1EE13negative_signEv
-Visited: KSt10moneypunctIcLb1EE13negative_signEv*FileHeader* 
+Visited: KSt10moneypunctIcLb1EE13negative_signEv
 ```
 
 #### 重新扩展文件属性
@@ -321,9 +317,9 @@ private:
   time_t lastVisitedTime;
   time_t lastModifiedTime;
   time_t CreateTime;
-  char *path;//之后可能会删除
+  char *path;                     //之后可能会删除
   FileType fileType;
-  int inodeSector; //OpenFile析构时需要保存信息
+  int inodeSector;                //OpenFile析构时需要保存信息
   char *TimeToString(time_t t);
 
 // time_t到可读的时间串转换
@@ -641,7 +637,7 @@ FileHeader contents.  File size: 125952.  File blocks:
     single indirect indexing: (mapping table sector: 1020)
       1021 1022
 
-=== remove the file "largeFile" from *Nachos* ===
+=== remove the file "largeFile" from Nachos ===
 === prints the contents of the entire file system again ===
 Bit map file header:
 File type: NORM
@@ -666,7 +662,7 @@ Directory contents:
 
 #### 结论
 
-结果显示，系统为*123K*的大文件分配了*1022*块磁盘，证明*Allocate()*实现正确。在删除大文件之后，*bitMap*恢复到之前的状态，证明*DeAllocate*()实现正确。全程没有出错，证明*ByteToSector()*实现正确，因为整个过程都会调用*writeAt*()和*readAt*()来对文件进行读写，而这二者都会调用*ByteToSector()*。
+结果显示，系统为*123K*的大文件分配了*1022*块磁盘，证明*Allocate*()实现正确。在删除大文件之后，*bitMap*恢复到之前的状态，证明*DeAllocate*()实现正确。全程没有出错，证明*ByteToSector()*实现正确，因为整个过程都会调用*writeAt*()和*readAt*()来对文件进行读写，而这二者都会调用*ByteToSector*()。
 
 结论：成功实现多级索引（最高二级），并且能够表示*Nachos*物理磁盘的最大容量。
 
@@ -680,18 +676,6 @@ Directory contents:
 2. 打开目录文件(*OpenFile*)
 3. 在内存中*new*一个*directory*
 4. 调用*directory*的*FetchFrom*函数从磁盘读入目录
-
-为了实现多级目录，并保持步骤的一致性，我在*DirectoryEntry*中添加了下一级目录的*i-node*编号。
-
-```cpp
-class DirectoryEntry
-{
-public:
-  ...
-  //lab4 实现多级目录
-  int nextInode;//下一级目录的*i-node*
-};
-```
 
 *Nachos*规定目录最多包含*10*个目录项
 
@@ -724,7 +708,7 @@ public:
 > }
 > ```
 >
-> *todo:Add()/Remove()/Find()*
+> *todo:Add()/Remove()/Find()/FetchFrom/WriteBack()*
 
 *Linux*中使用'/'来区分不同级别的目录，并分别使用'./'和'../'来表示当前目录和上一级目录(*todo*)，我们沿用此规定。
 
@@ -1085,7 +1069,7 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 
 1. *Allocate*()每次从*0*开始，而*expandFile*()从*numSectors*(接着上一次的结尾开始）。
 2. *Allocate*()每次都需要创建新的*singleBuffer*和*doubleBuffer*（一/二级索引表），而*expandFile*()可能会对已有的*singleBuffer*/*doubleBuffer*进行操作。
-3. 准确地说，*Allocate*()是*expandFile*()的一种特殊情况。
+3. 实际上，*Allocate*()是*expandFile*()的一种特殊情况。
 
 ```cpp
 //----------------------------------------------------------------------
@@ -1558,11 +1542,15 @@ if(synchDisk->thraedsPerFile[sector])
 
 ### *segmentation fault*
 
-突破文件名长度限制：将文件名从*char*[]改为*char*\*，之后会报错*segmentation* *fault*，这是因为*FileHeader*中使用了*strncmp*()函数和*strncpy*()函数，需要将它们分别改为*strcmp*和*table[i].name = name*。
-
->不能将*strncpy*函数改为*strcpy*函数，因为*char*\*指针指向的内存可能不足以储存*src*字符串，导致*segmentation* *fault*。
+> [造成*segment* *fault*，产生*core* *dump*的可能原因](https://blog.csdn.net/weiyuefei/article/details/79383608)
 >
->不过最终我还是采用了*char*[]来存储文件名，原因在之前*exercise2*中的反思有说过。
+> 内存访问越界：
+>
+>  a) 由于使用错误的下标，导致数组访问越界
+>
+>  b) 搜索字符串时，依靠字符串结束符来判断字符串是否结束，但是字符串没有正常的使用结束符
+>
+>  c) 使用strcpy, strcat, sprintf, strcmp, strcasecmp等字符串操作函数，将目标字符串读/写爆。应该使用strncpy, strlcpy, strncat, strlcat, snprintf, strncmp, strncasecmp等函数防止读写越界。
 
 ### *160 - 54 = 170?*
 
@@ -1606,7 +1594,7 @@ Disk::ReadRequest(int sectorNumber, char* data)
 }
 ```
 
-我打印了一下这个值，为-*1219460751*，错误应该发生在某个调用它的函数中。而调用*ReadRequest*的函数只有*SynchDisk::ReadSector*，找出所有调用ReadSector的地方，发现全部位于*filehdr.cc*中，还有一处位于*OpenFile.cc::ReadAt()*中，而这个函数会反过来调用*filehdr.cc::ByteToSector()*,因此我们不仅在每一个*ReadSector*函数进入之前，判断一下传入的参数的值，还需要在*filehdr.cc::ByteToSector() return*的地方也需要判断一下*return*的值，如果小于零，则打印一下。最后找到*bug*：
+我打印了一下这个值，为-*1219460751*，错误应该发生在某个调用它的函数中。而调用*ReadRequest*的函数只有*SynchDisk::ReadSector*，找出所有调用*ReadSector*()的地方，发现全部位于*filehdr.cc*中，还有一处位于*OpenFile.cc::ReadAt*()中，而这个函数会反过来调用*filehdr.cc::ByteToSector*(),因此我们不仅在每一个*ReadSector*()函数进入之前，判断一下传入的参数的值，还需要在*filehdr.cc::ByteToSector() return*的地方需要判断一下*return*的值，并打印小于零的值。最后找到*bug*：
 
 ```cpp
 int FileHeader::ByteToSector(int offset)
@@ -1620,7 +1608,7 @@ int FileHeader::ByteToSector(int offset)
     ...
 ```
 
-> 这个*bug*真的坑爹，都怪自己当初定义宏的时候没注意，像这样两个一样名字的宏在*vscode*代码补全下很容易就出错了。
+> 这个*bug*很隐蔽，像这样两个一样名字的宏在*vscode*代码补全下很容易就出错了。
 
 再次运行脚本：
 
@@ -1696,25 +1684,23 @@ bool FileHeader::expandFile(BitMap *freeMap, int extraBytes)
 }
 ```
 
-即将*numBytes*的定义改为当前文件的最大容量，成功解决*bug*。
+获得*numSectors*之后更新*numBytes*的值，成功解决*bug*。
 
 ## 收获&感想
 
-这次lab我整整写了3周，有很多细节需要慢慢调试，一层层函数套下来，调试写的*DEBUG*太多，有时候都忘记在哪里写了个*DEBUG*，打印结果常常让人很抓狂。
+这次*lab*我整整写了*3*周，有很多细节需要慢慢调试，一层层函数套下来，调试写的*DEBUG*太多，有时候都忘记在哪里写了个*DEBUG*，打印结果常常让人很抓狂。
 
 真的超级麻烦，会有各种意想不到的情况发生，有时候之前还能运行的脚本，因为后面的某个修改变得失效了，又需要一点一点地看改动的地方可能会产生什么影响，一点一点地排查。
 
-现在呈现在您面前的代码都是我一点一点反复斟酌，一版一版反复修改的最终版本，如果有兴趣可以看看filesys_pending文件夹下面的代码，里面有我写坏的很多版本，或者有一些版本是*work*的，但是我嫌弃代码太烂了，又重新改了（比如说间接索引，为了实现二级索引的分配和扩展，我反复改了三版，耗费了我整整一周的时间，最后才拿出一个让我比较满意的版本）。
+现在呈现在您面前的代码都是我一点一点反复斟酌，一版一版反复修改的最终版本，如果有兴趣可以看看*filesys_pending*文件夹下面的代码，里面有我写坏的很多版本，或者有一些版本是*work*的，但是我嫌弃代码太烂了，又重新改了（比如说间接索引，为了实现二级索引的分配和扩展，我反复改了三版，耗费了我整整一周的时间，最后才拿出一个让我比较满意的版本）。
 
-可以说，这次*lab*的每一个测试结果，都是说明我很认真完成了这次lab的凭证。为了让测试结果符合我心中正确程序应该有的样子，真的调试了很久很久。。。
-
-不过，当结果最终呈现在眼前的时候，那种成就感，是溢于言表的！
+可以说，这次*lab*的每一个测试结果，都是说明我很认真完成了这次*lab*的凭证。为了让测试结果符合我心中正确程序应该有的样子，真的调试了很久很久。。。
 
 ## 参考文献：
 
 《*Nachos*中文教程》
 
-[Lab5 文件系统--github](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
+[*Lab5* 文件系统--*github*](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
 
 [*Nachos Lab5*实习报告](https://wenku.baidu.com/view/04382358f6ec4afe04a1b0717fd5360cbb1a8d40.html?re=view)
 
