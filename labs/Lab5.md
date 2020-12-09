@@ -1,6 +1,6 @@
 # Lab5 系统调用
 
-##### 李糖 2001210320
+李糖 2001210320
 
 ## 任务完成情况
 
@@ -32,17 +32,17 @@
 
 ```cpp
 //定义系统调用号
-#define SC_Halt 0
-#define SC_Exit 1
-#define SC_Exec 2
-#define SC_Join 3
+#define SC_Halt   0
+#define SC_Exit   1
+#define SC_Exec   2
+#define SC_Join   3
 #define SC_Create 4
-#define SC_Open 5
-#define SC_Read 6
-#define SC_Write 7
-#define SC_Close 8
-#define SC_Fork 9
-#define SC_Yield 10
+#define SC_Open   5
+#define SC_Read   6
+#define SC_Write  7
+#define SC_Close  8
+#define SC_Fork   9
+#define SC_Yield  10
 
 //文件系统相关，5个：
 void Create(char *name);                           //创建名为name的文件
@@ -457,7 +457,7 @@ void StartProcess(char *filename)
 typedef int SpaceId;	
 ```
 
-注释里给出的定义为“每个用户程序的一个”独特的标识符”，这个标识符可以是*space*的地址，也可以是*thread*的地址，甚至可以是*thread*的*ID*（*lab1*），我认为三者都可以，因为它们都是对thread的唯一描述，并且”同生（构造时）同死（析构时）“，我选用*threadID*的来实现, 因为*Nachos*的*Finish*函数有*BUG*，可能会导致*threadToBeDestroyed*指针不被释放，这点在*lab1*中有详细论述。	
+注释里给出的定义为“每个用户程序的一个”独特的标识符”，这个标识符可以是*space*的地址，也可以是*thread*的地址，甚至可以是*thread*的*ID*（*lab1*），我认为三者都可以，因为它们都是对*thread*的唯一描述，并且”同生（构造时）同死（析构时）“，我选用*threadID*的来实现, 因为*Nachos*的*Finish*函数有*BUG*，可能会导致*threadToBeDestroyed*指针不被释放，这点在*lab1*中有详细论述。	
 
 ### *Fork*()
 
@@ -469,7 +469,7 @@ void Fork(void (*func)());
 2. *new*一个线程，并*Fork*辅助函数*fork_helper*
 3. 在辅助函数中，对新线程的寄存器和页表初始化
 4. 调用*Machine::Run*()开始执行
-5. PC自增
+5. *PC*自增
 
 ### *Yield*()
 
@@ -639,7 +639,7 @@ Machine halting!
 
 ### 结论
 
-结果显示，主函数先*fork*一个线程，让出*CPU*；这个线程创造了一个名为*text1*的文件，正常退出；然后主函数调用Exec执行*exercise2*中使用的测试文件*file_syscall_test*，主函数正常退出，最终，*exercise2*的测试程序正常退出。
+结果显示，主函数先*fork*一个线程，让出*CPU*；这个线程创造了一个名为*text1*的文件，正常退出；然后主函数调用*Exec*执行*exercise2*中使用的测试文件*file_syscall_test*，主函数正常退出，最终，*exercise2*的测试程序正常退出。
 
 符合预期，实验成功。
 
@@ -698,7 +698,9 @@ delete[] name;
 
 ## 收获&感想
 
-搞清楚每个变量到底是在*Nachos*内存，还是在宿主主机内存。这关系到是使用辅助函数还是直接使用强制类型转换。
+本次lab的难度文件系统相比还是比较简单的，最关键的就是搞清楚每个变量到底是在*Nachos*内存，还是在宿主主机内存。这关系到是使用辅助函数还是直接使用强制类型转换。
+
+
 
 ## 参考文献
 
