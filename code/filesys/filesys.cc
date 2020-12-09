@@ -56,6 +56,8 @@
 // sectors, so that they can be located on boot-up.
 #define FreeMapSector 0
 #define DirectorySector 1
+//lab4 pipe
+#define PipeSector 2
 
 // Initial file sizes for the bitmap and directory; until the file system
 // supports extensible files, the directory size sets the maximum number
@@ -63,7 +65,8 @@
 #define FreeMapFileSize (NumSectors / BitsInByte)
 #define NumDirEntries 10
 #define DirectoryFileSize (sizeof(DirectoryEntry) * NumDirEntries)
-
+//lab4 pipe
+#define PipeFileSize 128
 //----------------------------------------------------------------------
 // FileSystem::FileSystem
 // 	Initialize the file system.  If format = TRUE, the disk has
@@ -86,14 +89,22 @@ FileSystem::FileSystem(bool format)
         Directory *directory = new Directory(NumDirEntries);
         FileHeader *mapHdr = new FileHeader;
         FileHeader *dirHdr = new FileHeader;
-
+        
+// #ifdef PIPE//lab4 pipe
+        FileHeader *pipeHdr = new FileHeader;
+        freeMap->Mark(PipeSector);
+        ASSERT(pipeHdr->Allocate(freeMap, PipeFileSize));
+        pipeHdr->SetFileType(NORM);
+        pipeHdr->SetInodeSector(PipeSector);
+        pipeHdr->WriteBack(PipeSector);
+        pipeFile = new OpenFile(PipeSector);
+// #endif
         DEBUG('f', "Formatting the file system.\n");
 
         // First, allocate space for FileHeaders for the directory and bitmap
         // (make sure no one else grabs these!)
         freeMap->Mark(FreeMapSector);
         freeMap->Mark(DirectorySector);
-
         // Second, allocate space for the data blocks containing the contents
         // of the directory and bitmap files.  There better be enough space!
         ASSERT(mapHdr->Allocate(freeMap, FreeMapFileSize));
@@ -120,8 +131,7 @@ FileSystem::FileSystem(bool format)
 
         freeMapFile = new OpenFile(FreeMapSector);
         directoryFile = new OpenFile(DirectorySector);
-        
-        
+
         // Once we have the files "open", we can write the initial version
         // of each file back to disk.  The directory at this point is completely
         // empty; but the bitmap has been changed to reflect the fact that
@@ -282,10 +292,10 @@ bool FileSystem::Remove(char *name)
         delete directory;
         return FALSE; // file not found
     }
-    #ifdef MULTI_THREAD_PER_FILE
-    if(synchDisk->thraedsPerFile[sector])
-    return FALSE;
-    #endif
+#ifdef MULTI_THREAD_PER_FILE
+    if (synchDisk->thraedsPerFile[sector])
+        return FALSE;
+#endif
     fileHdr = new FileHeader;
     fileHdr->FetchFrom(sector);
 

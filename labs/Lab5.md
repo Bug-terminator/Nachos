@@ -16,9 +16,7 @@
 
 本实习希望通过修改*Nachos*系统的底层源代码，达到“实现系统调用”的目标。
 
-## 一、理解*Nachos*系统调用
-
-### *Exercise1*  源代码阅读
+## *Exercise1*  源代码阅读
 
 > 阅读与系统调用相关的源代码，理解系统调用的实现原理。
 >
@@ -28,7 +26,7 @@
 >
 > *code/test/start.s*
 
-####  *code/userprog/syscall.h*
+###  *code/userprog/syscall.h*
 
 > 定义*nachos*的系统调用,主要包括系统调用号和系统调用函数，内核通过识别用户程序传递的系统调用号确定系统调用类型。
 
@@ -61,7 +59,7 @@ SpaceId Exec(char *name);  //加载并执行名为name的可执行文件，返�
 int Join(SpaceId id);      //等待标识符为id的用户线程执行完毕，返回其退出状态
 ```
 
-#### *code/userprog/exception.cc*
+### *code/userprog/exception.cc*
 
 > 定义进行异常处理的*ExceptionHandler*函数，主要流程是根据异常信息处理不同异常，包括系统调用。
 
@@ -79,11 +77,11 @@ int Join(SpaceId id);      //等待标识符为id的用户线程执行完毕，�
 >
 > *r4/5/6/7*->系统调用的四个参数
 
-#### *code/test/start.s*
+### *code/test/start.s*
 
 辅助用户程序运行的汇编代码，主要包括初始化用户程序和系统调用相关操作
 
-##### 背景知识
+#### 背景知识
 
 > [MIPS中j，jr，jal这三个跳转指令有什么区别？](https://zhidao.baidu.com/question/2116514308751597107.html)
 >
@@ -120,7 +118,7 @@ int Join(SpaceId id);      //等待标识符为id的用户线程执行完毕，�
 
    因为用的是j指令，所以在执行系统调用之后需要人为地将*PC*的值增加*4*，否则程序会进入死循环。
 
-#### 系统调用流程
+### 系统调用流程
 
 >*machine*的*Run*函数运行用户程序，实现在*machine*/*mipssim*.cc，基本流程是通过*OneInstruction*函数完成指令译码和执行，通过*interrupt*->*OneTick*函数使得时钟前进：
 >
@@ -129,15 +127,13 @@ int Join(SpaceId id);      //等待标识符为id的用户线程执行完毕，�
 >3. *exception*.cc通过系统调用号识别系统调用，进行相关处理，如果系统调用存在返回值，那么通过寄存器r2传递，流程结束时，需要更新*PC* 
 >4. 系统调用结束，程序继续执行
 
-#### 添加系统调用
+### 添加系统调用
 
 > 1. *syscfall*.h定义系统调用接口、系统调用号 
 > 2. *code*/*test*/*start*.s添加链接代码 
 > 3. *exception*.cc添加系统调用处理过程 
 
-## **二、文件系统相关的系统调用**
-
-### *Exercise2* 系统调用实现
+## *Exercise2* 系统调用实现
 
 > 类比*Halt*的实现，完成与文件系统相关的系统调用：*Create*, *Open*，*Close*，*Write*，*Read*。
 >
@@ -154,7 +150,7 @@ else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_
         }
  ```
 
-#### *Machine::advancePC*()
+### *Machine::advancePC*()
 
 > 自增*PC*
 
@@ -168,7 +164,7 @@ void Machine::advancePC()
 }
 ```
 
-#### *getNameFromNachosMemory*()
+### *getNameFromNachosMemory*()
 
 > 从*Nachos*内存中获取文件名的辅助函数
 
@@ -186,7 +182,7 @@ char* getNameFromNachosMemory(int address) {
 }
 ```
 
-#### *Create*()
+### *Create*()
 
 ```cpp
 void Create(char *name);
@@ -197,7 +193,7 @@ void Create(char *name);
 3. 调用*filesys*->*Create*()创建文件
 4. 调用*advancePC*函数自增*PC*
 
-#### *Open*()
+### *Open*()
 
 ```cpp
 OpenFileId Open(char *name);
@@ -209,7 +205,7 @@ OpenFileId Open(char *name);
 4. 将*openfile*的地址（所谓的*OpenFileId*）写入r2寄存器
 5. 调用*advancePC*函数自增*PC*
 
-#### *Write*()
+### *Write*()
 
 ```cpp
 void Write(char *buffer, int size, OpenFileId id);
@@ -220,7 +216,7 @@ void Write(char *buffer, int size, OpenFileId id);
 3. 调用*openfile*->*Write*()向*buffer*中写*size*个字节
 4. 调用*advancePC*函数自增*PC*
 
-#### *Read*()
+### *Read*()
 
 ```cpp
 int Read(char *buffer, int size, OpenFileId id);
@@ -232,7 +228,7 @@ int Read(char *buffer, int size, OpenFileId id);
 4. 将*numBytes*存入*r2*寄存器
 5. 调用*advancePC*函数自增*PC*
 
-#### *Close*()
+### *Close*()
 
 ```cpp
 void Close(OpenFileId id);
@@ -289,7 +285,7 @@ void FileSystemHandler(int type)
 }
 ```
 
-#### 思考
+### 思考
 
 在阅读了*xv6*源代码之后，我发现*Nachos*缺少压栈过程：对于每一个*syscall*，在执行之前，都应该将*PC*保存起来，处理完*syscall*之后也需要将*PC*恢复。所以每个系统调用的正确写法都应该在首尾分别加上如下语句，以*Write*为例：
 
@@ -316,7 +312,7 @@ Write:
 
 可以发现*syscall*处理过程中*PC*的值一直没有变过，所以，对于文件系统来说，压栈和出栈的过程可以省略，*exercise3*的结果将证明此结论的正确性。	
 
-### *Exercise3*  编写用户程序
+## *Exercise3*  编写用户程序
 
 > 编写并运行用户程序，调用练习2中所写系统调用，测试其正确性。
 
@@ -361,7 +357,7 @@ int main()
 }
 ```
 
-#### 测试
+### 测试
 
 ```cpp
 vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/userprog$ ./nachos -x ../test/file_syscall_test
@@ -381,13 +377,11 @@ Machine halting!
 rose is a rose is a rose.
 ```
 
-#### 结论
+### 结论
 
 实验成功！
 
-## **三、执行用户程序相关的系统调用**
-
-### *Exercise4* 系统调用实现
+## *Exercise4* 系统调用实现
 
 > 实现如下系统调用：*Exec*，*Fork*，*Yield*，*Join*，*Exit*。*Syscall*.*h*文件中有这些系统调用基本说明。
 
@@ -413,7 +407,7 @@ void Scheduler::Run(Thread *nextThread)
 }
 ```
 
-我写了一个函数*FileSystemHandler*来处理用户程序系统调用:
+我写了一个函数*UserProgHandler*来处理用户程序系统调用:
 
  ```cpp
 else if (type == SC_Exit || type == SC_Exec || type == SC_Join || type == SC_Fork || type == SC_Yield)
@@ -422,7 +416,7 @@ else if (type == SC_Exit || type == SC_Exec || type == SC_Join || type == SC_For
 }
  ```
 
-#### *Exec*()
+### *Exec*()
 
 ```cpp
 SpaceId Exec(char *name);
@@ -465,7 +459,7 @@ typedef int SpaceId;
 
 注释里给出的定义为“每个用户程序的一个”独特的标识符”，这个标识符可以是*space*的地址，也可以是*thread*的地址，甚至可以是*thread*的*ID*（*lab1*），我认为三者都可以，因为它们都是对thread的唯一描述，并且”同生（构造时）同死（析构时）“，我选用*threadID*的来实现, 因为*Nachos*的*Finish*函数有*BUG*，可能会导致*threadToBeDestroyed*指针不被释放，这点在*lab1*中有详细论述。	
 
-#### *Fork*()
+### *Fork*()
 
 ```cpp
 void Fork(void (*func)());
@@ -477,7 +471,7 @@ void Fork(void (*func)());
 4. 调用*Machine::Run*()开始执行
 5. PC自增
 
-#### *Yield*()
+### *Yield*()
 
 ```cpp
 void Yield();		
@@ -486,7 +480,7 @@ void Yield();
 1. 调用*currentThread->Yield*()
 2. *PC*自增
 
-#### *Join*()
+### *Join*()
 
 ```cpp
 int Join(SpaceId id);
@@ -496,7 +490,7 @@ int Join(SpaceId id);
 2. 当该线程存在的情况下调用*currentThread->Yield()*主动让出*CPU*
 3. *PC*自增
 
-#### *Exit*()
+### *Exit*()
 
 ```cpp
 void Exit(int status);	
@@ -584,11 +578,11 @@ void fork_func(int arg)
 }
 ```
 
-### *Exercise5*  编写用户程序
+## *Exercise5*  编写用户程序
 
 > 编写并运行用户程序，调用练习*4*中所写系统调用，测试其正确性。
 
-#### 测试
+### 测试
 
 我在*code/test/*中编写了我的测试程序*user_prog_test.c*, 并在*code/test/MakeFile*中添加相关依赖。
 
@@ -643,7 +637,7 @@ Assuming the program completed.
 Machine halting!
 ```
 
-#### 结论
+### 结论
 
 结果显示，主函数先*fork*一个线程，让出*CPU*；这个线程创造了一个名为*text1*的文件，正常退出；然后主函数调用Exec执行*exercise2*中使用的测试文件*file_syscall_test*，主函数正常退出，最终，*exercise2*的测试程序正常退出。
 

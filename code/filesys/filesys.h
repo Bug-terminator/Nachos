@@ -38,7 +38,6 @@
 #include "copyright.h"
 #include "openfile.h"
 
-
 #ifdef FILESYS_STUB // Temporarily implement file system calls as
 // calls to UNIX, until the real file system
 // implementation is available
@@ -95,11 +94,13 @@ public:
 	bool Mkdir(char *name); //在当前目录下创建目录
 
 private:
-
 	OpenFile *freeMapFile;	 // Bit map of free disk blocks,
 							 // represented as a file
 	OpenFile *directoryFile; // "Root" directory -- list of
 							 // file names, represented as a file
+#ifdef PIPE
+	OpenFile *pipeFile;
+#endif
 };
 
 #endif // FILESYS

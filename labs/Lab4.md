@@ -2,9 +2,9 @@
 
 ## 说明
 
-本次*lab*中的测试结果均使用代码块保存，这是因为测试结果比较长，截图不好看。本人郑重承诺所有结果均无篡改情况，并且本人愿意承担篡改结果的一切后果。每个测试之前都给出了方法，欢迎验证。[我的github](https://github.com/Bug-terminator/nachos)
+本次*lab*中的测试结果均使用代码块保存，这是因为测试结果比较长，截图不好看。本人郑重承诺所有结果均无篡改情况，并且本人愿意承担篡改结果的一切后果。每个测试之前都给出了方法，欢迎验证。[我的*github*](https://github.com/Bug-terminator/nachos)
 
-Tips：在使用*vscode*编辑时，可以先把*main*.*cc*中关于*fileSystem*的*define*全部注释掉，这样可以方便代码补全。举个例子：
+*Tips*：在使用*vscode*编辑时，可以先把*main*.*cc*中关于*fileSystem*的*define*全部注释掉，这样可以方便代码补全。举个例子：
 
 ```cpp
 //#ifdef FILESYS //暂时注释
@@ -1553,6 +1553,45 @@ if(synchDisk->thraedsPerFile[sector])
 ### *Challenge2* 实现*pipe*机制
 
 > 重定向*OpenFile*的输入输出方式，使得前一进程从控制台读入数据并输出至管道，后一进程从管道读入数据并输出至控制台。
+
+我实现了有名管道。
+
+规定二号扇区为管道文件*i-node*区，并规定*pipe*文件的大小为*128*
+
+```cpp
+#define PipeSector 2
+#define PipeFileSize 128
+```
+
+在*FileSystem*的构造函数中对*pipe*初始化：
+
+```cpp
+
+```
+
+此时我已经实现了文件系统的系统调用(*next lab*），我在*code/test*目录下写了两个*User Level*程序，第一个程序会创建管道，向管道内写入一句诗"*Rose is a rose is a rose.*"。第二个程序会打开这个管道，然后读取它的内容。
+
+*code/test/pipe_wirter.c*:
+
+```cpp
+#include "syscall.h"
+#include "stdio.h"
+
+#define QUOTE_SIZE 26
+const char *quote = "Rose is a rose is a rose.";
+OpenFileId pipeFile;
+
+int main()
+{
+    Create("pipe");                     //创建管道
+    pipeFile = Open("pipe");            //打开管道
+    Write(quote, QUOTE_SIZE, pipeFile); //向管道中写入数据
+    Close(pipeFile);                    //关闭管道
+    Exit(0);                            //退出
+}
+```
+
+
 
 ## 困难&解决
 

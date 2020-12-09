@@ -38,7 +38,7 @@ CPP = gcc -E
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt shell matmult sort 99table file_syscall_test user_prog_test
+all: halt shell matmult sort 99table file_syscall_test user_prog_test pipe_reader pipe_wirter
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.c > strt.s
@@ -90,3 +90,16 @@ user_prog_test.o: user_prog_test.c
 user_prog_test: user_prog_test.o start.o
 	$(LD) $(LDFLAGS) start.o user_prog_test.o -o user_prog_test.coff
 	../bin/coff2noff user_prog_test.coff user_prog_test
+
+#lab4 pipe
+pipe_reader.o: pipe_reader.c
+	$(CC) $(CFLAGS) -c pipe_reader.c
+pipe_reader: pipe_reader.o start.o
+	$(LD) $(LDFLAGS) start.o pipe_reader.o -o pipe_reader.coff
+	../bin/coff2noff pipe_reader.coff pipe_reader
+
+pipe_wirter.o: pipe_wirter.c
+	$(CC) $(CFLAGS) -c pipe_wirter.c
+pipe_wirter: pipe_wirter.o start.o
+	$(LD) $(LDFLAGS) start.o pipe_wirter.o -o pipe_wirter.coff
+	../bin/coff2noff pipe_wirter.coff pipe_wirter
