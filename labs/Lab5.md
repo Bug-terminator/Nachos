@@ -584,7 +584,7 @@ void fork_func(int arg)
 
 ### 测试
 
-我在*code/test/*中编写了我的测试程序*user_prog_test.c*, 并在*code/test/MakeFile*中添加相关依赖。
+我在*code/test/*中编写了我的测试程序*file_syscall_test.c*, 并在*code/test/MakeFile*中添加相关依赖。
 
 ```cpp
 #include "syscall.h"
