@@ -226,7 +226,7 @@ void FileSystemHandler(int type)
     else if (type == SC_Close)
     {                                                                      // void Close(OpenFileId id);
         OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);         // OpenFile object id
-        cout << "Success delete file ID " << (OpenFileId)openFile << endl; // release the file
+        cout << "Success delete file ID" << (OpenFileId)openFile << endl; // release the file
         delete openFile;
     }
     else if (type == SC_Read)
@@ -236,7 +236,7 @@ void FileSystemHandler(int type)
         OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);      // OpenFile object ptr
         int numByte = openFile->Read(&machine->mainMemory[addr], size); //read from file
         machine->WriteRegister(2, numByte);                             //return value
-        cout << "Success read " << numByte << "bytes from file ID " << (OpenFileId)openFile << endl;
+        cout << "Success read " << numByte << "bytes from file ID" << (OpenFileId)openFile << endl;
     }
     else if (type == SC_Write)
     {
@@ -350,7 +350,7 @@ void ExceptionHandler(ExceptionType which)
     //lab2 exercise2
     else if (which = PageFaultException)
     {
-        ASSERT(machine->tlb); //保证tlb正确初始化
+    //     ASSERT(machine->tlb); //保证tlb正确初始化
         int badVAddr = machine->ReadRegister(BadVAddrReg);
         TLBMissHandler(badVAddr);
     }
