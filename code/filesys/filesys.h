@@ -98,9 +98,6 @@ private:
 							 // represented as a file
 	OpenFile *directoryFile; // "Root" directory -- list of
 							 // file names, represented as a file
-#ifdef PIPE
-	OpenFile *pipeFile;
-#endif
 };
 
 #endif // FILESYS

@@ -42,7 +42,10 @@ class BitMap {
     bool Test(int which);   	// Is the "nth" bit set?
     int Find();            	// Return the # of a clear bit, and as a side
 				// effect, set the bit. 
-				// If no bits are clear, return -1.
+				// If no bits are clear, return -1.u
+
+    //lab4 分配连续磁道
+    int FindContinuousSectors(int numSectors);
     int NumClear();		// Return the number of clear bits
 
     void Print();		// Print contents of bitmap

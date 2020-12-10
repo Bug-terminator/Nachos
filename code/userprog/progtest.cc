@@ -83,3 +83,48 @@ void ConsoleTest(char *in, char *out)
             return; // if q, quit
     }
 }
+
+//lab4 synchConcole
+void SynchConsoleTest(char *in, char *out)
+{
+    char ch;
+    SynchConsole *synchConsole = new SynchConsole(in, out);
+    for (;;)
+    {
+        ch = synchConsole->GetChar();
+        synchConsole->PutChar(ch);
+        if (ch == 'q')
+            return; // if q, quit
+    }
+}
+
+//lab4 pipe
+SynchConsole *sc_writer, *sc_reader;
+char ch;
+void Pipe_Writer()
+{
+    fileSystem->Create("pipe", 0); //创建管道
+    sc_writer = new SynchConsole(NULL, "pipe");
+    do
+    {
+        ch = sc_writer->GetChar();
+        sc_writer->PutChar(ch);
+
+    } while (ch != 'q'); //向管道中输出数据
+}
+
+void Pipe_Reader()
+{
+    sc_reader = new SynchConsole("pipe", NULL);
+    do
+    {
+        ch = sc_reader->GetChar();
+        sc_reader->PutChar(ch);
+    } while (ch != 'q'); //从管道中获取数据
+}
+
+void PipeTest()
+{
+    Pipe_Writer();
+    Pipe_Reader();
+}

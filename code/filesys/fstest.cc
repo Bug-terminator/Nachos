@@ -112,8 +112,9 @@ void Print(char *name)
 #define FileName "TestFile"
 #define Contents "1234567890"
 #define ContentSize strlen(Contents)
-#define FileSize ((int)(ContentSize * 5000))
+#define FileSize ((int)(ContentSize * 5000)) 
 
+                   
 static void
 FileWrite()
 {
@@ -133,8 +134,7 @@ FileWrite()
         printf("Perf test: unable to open %s\n", FileName);
         return;
     }
-
-
+                                                              
     for (i = 0; i < FileSize; i += ContentSize)
     {
         numBytes = openFile->Write(Contents, ContentSize);

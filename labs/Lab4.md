@@ -484,11 +484,11 @@ bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
 }
 ```
 
-而*DeAllocate*为*Allocate*的逆向操作，这里不再赘述。
+而*DeAllocate*()为*Allocate*()的逆向操作，这里不再赘述。
 
 #### *ByteToSector()*
 
-每次执行地址转换的函数是*ByteToSector()*，改变了索引方式之后，我们也需要对它进行改变。
+每次执行地址转换的函数是*ByteToSector*()，改变了索引方式之后，我们也需要对它进行改变。
 
 ```cpp
 int FileHeader::ByteToSector(int offset)
@@ -519,11 +519,9 @@ int FileHeader::ByteToSector(int offset)
 
 #### 测试
 
-> 这里我引用了*github*一位学长的测试脚本，位于*code\filesys\test\_large_file_test.sh*中，该脚本文件的作用为
+> 这里我引用了*github*一位学长的测试脚本，位于*code/filesys/test/_large_file_test.sh*中，该脚本文件将产生一个大文件，复制进*Nachos*，然后删除该文件。我们可以通过该脚本测试我们程序的正确性。
 >
-> 产生一个大文件，复制进*Nachos*，然后删除该文件。我们可以通过该脚本测试我们程序的正确性。
->
-> [Source--github](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
+> [*Source*--*github*](https://github.com/daviddwlee84/OperatingSystem/blob/master/Lab/Lab5_FileSystem/README.md)
 
 本次测试产生了一个*Nachos*物理内存(总共*128KB*）范围内理论上能够容纳的最大的文件(*123KB*)，如果脚本运行成功，那么可以证明我们的间接索引实现成功。在*terminal*中输入`test/large_file_test.sh`可查看结果（如果报错，请新建一个.*sh*文件，名字任意，把内容*copy*进去，再次运行即可）：
 
@@ -664,7 +662,7 @@ Directory contents:
 
 结果显示，系统为*123K*的大文件分配了*1022*块磁盘，证明*Allocate*()实现正确。在删除大文件之后，*bitMap*恢复到之前的状态，证明*DeAllocate*()实现正确。全程没有出错，证明*ByteToSector()*实现正确，因为整个过程都会调用*writeAt*()和*readAt*()来对文件进行读写，而这二者都会调用*ByteToSector*()。
 
-结论：成功实现多级索引（最高二级），并且能够表示*Nachos*物理磁盘的最大容量。
+结论：成功实现多级索引，并且能够表示*Nachos*物理磁盘的最大容量。
 
 ### *Exercise4* 实现多级目录
 
@@ -826,8 +824,8 @@ bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp)
                 success = FALSE;
             else
             {
-                //构造新的*i-node*，并分配初始化inode
-                FileHeader *hdr = new *FileHeader*;
+                //构造新的i-node，并分配初始化inode
+                FileHeader *hdr = new FileHeader;
                 if (!hdr->Allocate(freeMap, initialSize, NORM))
                     success = FALSE; // no space on disk for data
                 else
@@ -874,7 +872,7 @@ bool FileSystem::Create(char *path, int dirInode, int initialSize, BitMap *btmp)
                 {
                     // 将inode写回磁盘
                     hdr->WriteBack(sector);
-                    success = *Create*(p + 1, sector, initialSize, freeMap);
+                    success = Create(p + 1, sector, initialSize, freeMap);
                     //下一级目录的物理空间成功分配
                     if (success)
                     {
@@ -936,7 +934,7 @@ OpenFile *FileSystem::Open(char *path, int dirInode)
         DEBUG('f', "Opening file %s\n", name);
         sector = directory->Find(name);
         if (sector >= 0) //找到文件
-            OpenFile = new *OpenFile*(sector);
+            OpenFile = new OpenFile(sector);
         else
             DEBUG('f', "File doesn't exist, %s\n", name);
     }
@@ -1047,10 +1045,6 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 }
 ```
 
-#### 测试
-
-在实现*shell*之后进行。由于尚未测试过正确性，所以这套代码我暂时放在*filesys_pending*文件夹下，后续实验用的还是*Nachos*的原始目录结构。
-
 #### 改进
 
 当前的*Remove*()只能对文件本身进行删除，如果我们想删除*/var/log/rpmpkgs*下的*log*，我们能先删除*rpmpkgs*，再删除*log*。所以我们应该对此进行改进，使得可以递归地删除*log*和它的所有子文件夹(*todo*)。
@@ -1058,6 +1052,8 @@ bool FileSystem::Remove(char *path, int dirInode, BitMap *btmp)
 增加"./"和"../"（*todo*）
 
 将*Nachos*目录数组改为动态数组，突破目录项限制（*todo*）
+
+或许我能通过函数的重载来减少代码量？(*todo*)
 
 ### *Exercise5* 动态调整文件长度
 
@@ -1439,7 +1435,7 @@ wodemuqMachine halting!
 
 结果显示，在单线程下同步控制台能够正常工作，还没有测试多线程下的正确性(*todo*）。
 
-### *Exercise7* 实现文件系统的同步互斥访问机制，达到如下效果：
+### *Exercise7* 实现文件系统的同步互斥访问机制
 
 > a)    一个文件可以同时被多个线程访问。且每个线程独自打开文件，独自拥有一个当前文件访问位置，彼此间不会互相干扰。
 >
@@ -1447,7 +1443,7 @@ wodemuqMachine halting!
 >
 > c)    当某一线程欲删除一个文件，而另外一些线程正在访问该文件时，需保证所有线程关闭了这个文件，该文件才被删除。也就是说，只要还有一个线程打开了这个文件，该文件就不能真正地被删除。
 
-#### 背景知识：
+#### 背景知识
 
 > [*Linux*文件描述符（*File Descriptor*）简介](https://segmentfault.com/a/1190000009724931)
 >
@@ -1530,9 +1526,188 @@ if(synchDisk->thraedsPerFile[sector])
 
 ### *Challenge1*  性能优化
 
-> a)    例如，为了优化寻道时间和旋转延迟时间，可以将同一文件的数据块放置在磁盘同一磁道上
->
-> b)    使用*cache*机制减少磁盘访问次数，例如延迟写和预读取。
+#### a）优化寻道方式
+
+> 为了优化寻道时间和旋转延迟时间，可以将同一文件的数据块放置在磁盘同一磁道上
+
+为了将统一文件的数据块放在同一磁道上，我们在分配磁盘的策略上采取尽量连续的策略，这样可以提高同一文件集中在同一磁道的概率。因此我们需要增加连续分配磁道的机制，为*bitMap*添加成员函数*FindContinuousSectors*()，返回连续扇区的起始位置：
+
+```cpp
+int BitMap::FindContinuousSectors(int numSectors)
+{
+    //i表示起始位置，j表示连续磁盘中的下标
+    int i, j;
+    for (i = 0; i < numBits; i += (j + 1))
+    {
+        for (j = 0; j < numSectors && Test(i + j); ++j)
+            ;
+        if (j == numSectors) //找到连续磁盘
+        {
+            for (j = 0; j < numSectors; ++j)
+                Mark(i + j);
+            return i;
+        }
+    }
+    return -1;
+}
+```
+
+对应地，我们需要修改所有调用*bitMap->Find*()的位置，在分配时，优先使用连续分配，因为实现的多级索引导致*Allocate*()和*expandFile*(）变得很复杂，方便起见，这里使用*Nachos*的原始文件系统：
+
+```cpp
+bool FileHeader::Allocate(BitMap *freeMap, int fileSize)
+{
+    ...
+    int sector_i = freeMap->FindContinuousSectors();
+    if (sector_i == -1) //没有连续扇区，按照原来的方式分配
+    {
+        for (int i = 0; i < numSectors; i++)
+            dataSectors[i] = freeMap->Find();
+    }
+    else //找到连续扇区，按连续分配
+    {
+        for (int i = sector_i; i < numSectors + sector_i; ++i)
+        {
+            datasectors[i - sector_i] = i;
+        }
+    }
+    ...
+}
+```
+
+##### 测试
+
+先将*filesys/test/small*文件*copy*进*Nachos*两次，一个*small*占*2*个扇区，此时的位图如下：
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/filesys$ ./nachos -cp test/small small1 test/small small2 -D
+Bitmap set:
+0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+```
+
+然后删除*small1*，构造不连续空间:
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/filesys$ ./nachos -r small1 -D
+Bitmap set:
+0, 1, 2, 3, 4, 5, 8, 9,
+```
+
+最后将*filesys/test/big*文件（占*6*个扇区）*copy*进*Nachos*，按照传统的分配方式，它将先分配*6,7*，然后再分配*10,11,12,13*号扇区，但是采取连续分配之后，它会从*10*开始分配：
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/filesys$ ./nachos -cp test/big big -D
+Bitmap set:
+0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15  
+```
+
+##### 结论
+
+实验成功。
+
+#### b）实现Cache
+
+> 使用*cache*机制减少磁盘访问次数，例如延迟写和预读取。
+
+在*synchdisk.h*中添加*Cache*类：
+
+```cpp
+#define CACHE_SIZE 4
+class Cache
+{
+  public:
+  bool valid;
+  char data[SectorSize];
+  int sector;
+  Cache();
+}
+```
+
+*Nachos*访问磁盘的接口为*synchdick.cc*的*ReadSector*()，默认为直接访问。我们需要在访问磁盘之前，先访问*cache*，如果没找到，则需要使用相应的页面置换算法，我使用的是*FIFO*置换算法。
+
+```cpp
+void SynchDisk::ReadSector(int sectorNumber, char *data
+{
+    lock->Acquire(); // only one disk I/O at a time
+    int i = 0;
+    for (; i < CACHE_SIZE && !(cache[i].valid && cache[i].sector == sectorNumber); ++i)
+        ;                //先查找整个cache
+    if (i == CACHE_SIZE) //没找到,调用页面置换算法
+    {
+        int swap = -1;
+        for (i = 0; i < CACHE_SIZE && cache[i].valid; ++i) //先找cache中valid为FALSE的置换
+            ;
+        if (i == SectorSize) //cache满了，置换最后一项
+        {
+            swap = i - 1;
+            for (i = 1; i < SectorSize; ++i) //FIFO前移
+                cache[i - 1] = cache[i];
+        }
+        else //cache没满
+            swap = i;
+
+        disk->ReadRequest(sectorNumber, data);
+        semaphore->P(); // wait for interrupt
+        cache[swap].valid = TRUE;
+        cache[swap].sector = sectorNumber;
+        bcopy(data, cache[swap].data, SectorSize);
+    }
+    else //找到了，直接读cache中的数据
+    {
+        bcopy(cache[i].data, data, SectorSize);
+        // disk->HandleInterrupt();
+    }
+    lock->Release();
+}
+```
+
+然后修改*WriteSector*()函数，使用*write* *through*策略：当写定某页时，将该页从*cache*中删除。
+
+```cpp
+void SynchDisk::WriteSector(int sectorNumber, char *data)
+{
+    lock->Acquire(); // only one disk I/O at a time
+    for (int i = 0; i < CACHE_SIZE; ++i)
+    {
+        if(cache[i].sector == sectorNumber)
+        {
+            cache[i].valid = FALSE;
+            break;
+        }
+    }
+    disk->WriteRequest(sectorNumber, data);
+    semaphore->P(); // wait for interrupt
+    lock->Release();
+}
+```
+
+##### 测试
+
+测试使用系统提供的文件系统测试程序*filesys/fstest.cc*，先看没用*cache*时的结果：
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/filesys$ ./nachos -t
+Starting file system performance test:
+Sequential write of 50000 byte file, in 10 byte chunks
+Sequential read of 50000 byte file, in 10 byte chunks
+Disk I/O: reads 40903, writes 7202
+```
+
+共读40903次；由于使用的是*write* *through*策略，所以写的次数预计不会改变。再看使用*cache*之后的结果，需要在*code/filesys/MakeFile*中添加开关*-DCACHE*：
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/filesys$ ./nachos -t
+Starting file system performance test:
+Sequential write of 50000 byte file, in 10 byte chunks
+Sequential read of 50000 byte file, in 10 byte chunks
+Disk I/O: reads 7499, writes 7202
+```
+
+实现了*cache*之后，读的次数减少为7499次，写的次数没变，符合预期。
+
+##### 结论
+
+成功实现cache。
 
 ### *Challenge2* 实现*pipe*机制
 
@@ -1540,42 +1715,105 @@ if(synchDisk->thraedsPerFile[sector])
 
 我实现了有名管道。
 
-规定二号扇区为管道文件*i-node*区，并规定*pipe*文件的大小为*128*
+有名管道的实质就是一个文件，它实现了没有亲缘关系进程之间的通信。题目要求从控制台读取数据，那么需要用到*console*，我选择使用[*exercise6*](#实现 Class SynchConsole)中实现的*SynchConsole*。重定向*Concole*的输入输出方式，就是修改它构造函数的参数，默认为两个*NULL*，表示标准输入和输出：
 
 ```cpp
-#define PipeSector 2
-#define PipeFileSize 128
+SynchConsole::SynchConsole(char *readFile, char *writeFile)
 ```
 
-在*FileSystem*的构造函数中对*pipe*初始化：
+我在*code/userprog/progtest.cc*中实现了两个测试函数：定义两个*SynchConsole*，一个用于读，一个用于写；在写者进程中，调用*fileSystem->Create*()创建一个文件即可，命名为“*pipe*”。写者负责从键盘读取字符串到*pipe*中，读者负责从*pipe*中读取数据输出至屏幕：
 
 ```cpp
-
-```
-
-此时我已经实现了文件系统的系统调用(*next lab*），我在*code/test*目录下写了两个*User Level*程序，第一个程序会创建管道，向管道内写入一句诗"*Rose is a rose is a rose.*"。第二个程序会打开这个管道，然后读取它的内容。
-
-*code/test/pipe_wirter.c*:
-
-```cpp
-#include "syscall.h"
-#include "stdio.h"
-
-#define QUOTE_SIZE 26
-const char *quote = "Rose is a rose is a rose.";
-OpenFileId pipeFile;
-
-int main()
+void Pipe_Writer()
 {
-    Create("pipe");                     //创建管道
-    pipeFile = Open("pipe");            //打开管道
-    Write(quote, QUOTE_SIZE, pipeFile); //向管道中写入数据
-    Close(pipeFile);                    //关闭管道
-    Exit(0);                            //退出
+    fileSystem->Create("pipe", 0); //创建管道
+    sc_writer = new SynchConsole(NULL, "pipe"); //重定向输出
+    do
+    {
+        ch = sc_writer->GetChar();
+        sc_writer->PutChar(ch);
+    } while (ch != 'q'); //向管道中输出数据
+}
+
+void Pipe_Reader()
+{
+    sc_reader = new SynchConsole("pipe", NULL);//重定向输入
+    do
+    {
+        ch = sc_reader->GetChar();
+        sc_reader->PutChar(ch);
+    } while (ch != 'q'); //从管道中获取数据
 }
 ```
 
+在*main.cc*中增加上述两个函数的触发条件：
 
+```cpp
+else if (!strcmp(*argv, "-pr"))//pipe reader
+		{ 
+			Pipe_Reader();
+			interrupt->Halt(); 
+		}
+		else if (!strcmp(*argv, "-pw"))//pipe writer
+		{ 
+			Pipe_Writer();
+			interrupt->Halt(); 
+		}
+```
+
+*console.cc*中的*OpenForReadWrite*()函数规定了进程读写权限，当参数不为*NULL*时被触发：
+
+```cpp
+Console::Console(char *readFile, char *writeFile, VoidFunctionPtr readAvail,
+                 VoidFunctionPtr writeDone, int callArg)
+{
+    if (readFile == NULL)
+        readFileNo = 0; // keyboard = stdin
+    else
+        readFileNo = OpenForReadWrite(readFile, TRUE); // should be read-only
+    ...
+}
+```
+
+为了保证管道是半双工的，需要对读者的权限做出限制：
+
+```cpp
+int OpenForReadWrite(char *name, bool crashOnError)
+{
+    if (!strcmp(name, "pipe"))
+        int fd = open(name, O_RDONLY); //将读者权限改为read-only
+    else
+        int fd = open(name, O_RDWR, 0);
+    ASSERT(!crashOnError || fd >= 0);
+    return fd;
+}
+```
+
+#### 测试
+
+```cpp
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/userprog$ ./nachos -pw
+Rose is a rose is a rose.
+Rose is a rose is a rose.
+Rose is a rose is a rose.
+q
+  
+vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/userprog$ ./nachos -pr
+Rose is a rose is a rose.
+Rose is a rose is a rose.
+Rose is a rose is a rose.
+q
+```
+
+#### 结论
+
+成功实现有名管道。
+
+#### 改进
+
+此时我已经实现了*lab5*系统调用，我尝试使用用户级线程来实现匿名管道，但是有一个问题无法解决：那就是输入和输出，如何在用户程序中调用*scanf*()？或者调用*console*的接口？希望高手能指点一二。
+
+如果题目不做输入输出的要求，我可以实现匿名管道，在《*lab7*通信机制》中我将做出详细阐述。
 
 ## 困难&解决
 
@@ -1663,7 +1901,7 @@ Generate the large file for double indirect indexing
 Bit map file header:
 ```
 
-没有再报错了，其他与*exercise3*中的结果一致。
+没有再报错了，成功解决*bug*
 
 ### *Perf test: unable to write TestFile*
 
@@ -1731,7 +1969,7 @@ bool FileHeader::expandFile(BitMap *freeMap, int extraBytes)
 
 真的超级麻烦，会有各种意想不到的情况发生，有时候之前还能运行的脚本，因为后面的某个修改变得失效了，又需要一点一点地看改动的地方可能会产生什么影响，一点一点地排查。
 
-现在呈现在您面前的代码都是我一点一点反复斟酌，一版一版反复修改的最终版本，如果有兴趣可以看看*filesys_pending*文件夹下面的代码，里面有我写坏的很多版本，或者有一些版本是*work*的，但是我嫌弃代码太烂了，又重新改了（比如说间接索引，为了实现二级索引的分配和扩展，我反复改了三版，耗费了我整整一周的时间，最后才拿出一个让我比较满意的版本）。
+这一版代码是我一点一点反复斟酌，一版一版反复修改的最终版本，如果有兴趣可以看看*filesys_pending*文件夹下面的代码，里面有我写坏的很多版本，或者有一些版本是*work*的，但是我嫌弃代码太烂了，又重新改了（比如说间接索引，为了实现二级索引的分配和扩展，我反复改了三版，耗费了我整整一周的时间，最后才拿出一个让我比较满意的版本）。
 
 可以说，这次*lab*的每一个测试结果，都是说明我很认真完成了这次*lab*的凭证。为了让测试结果符合我心中正确程序应该有的样子，真的调试了很久很久。。。
 

@@ -152,7 +152,7 @@ bool PollFile(int fd)
 int OpenForWrite(char *name)
 {
     int fd = open(name, O_RDWR | O_CREAT | O_TRUNC, 0666);
-    
+
     ASSERT(fd >= 0);
     return fd;
 }
@@ -167,8 +167,12 @@ int OpenForWrite(char *name)
 
 int OpenForReadWrite(char *name, bool crashOnError)
 {
-    int fd = open(name, O_RDWR, 0);
-
+    int fd;
+    //lab4 pipe
+    if (!strcmp(name, "pipe"))
+         fd = open(name, O_RDONLY);
+    else
+         fd = open(name, O_RDWR, 0);
     ASSERT(!crashOnError || fd >= 0);
     return fd;
 }

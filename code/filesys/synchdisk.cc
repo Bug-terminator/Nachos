@@ -47,6 +47,9 @@ SynchDisk::SynchDisk(char *name)
     semaphore = new Semaphore("synch disk", 0);
     lock = new Lock("synch disk lock");
     disk = new Disk(name, DiskRequestDone, (int)this);
+#ifdef CACHE
+    cache = new Cache[CACHE_SIZE];
+#endif
 }
 
 //----------------------------------------------------------------------
@@ -62,6 +65,9 @@ SynchDisk::~SynchDisk()
     delete disk;
     delete lock;
     delete semaphore;
+#ifdef CACHE
+    delete[] cache;
+#endif
 }
 
 //----------------------------------------------------------------------
@@ -76,8 +82,41 @@ SynchDisk::~SynchDisk()
 void SynchDisk::ReadSector(int sectorNumber, char *data)
 {
     lock->Acquire(); // only one disk I/O at a time
+#ifdef CACHE
+    int i = 0;
+    for (; i < CACHE_SIZE && !(cache[i].valid && cache[i].sector == sectorNumber); ++i)
+        ;                //先查找整个cache
+    if (i == CACHE_SIZE) //没找到,调用页面置换算法
+    {
+        disk->ReadRequest(sectorNumber, data);
+        semaphore->P(); // wait for interrupt
+        int swap = -1;
+        for (i = 0; i < CACHE_SIZE && cache[i].valid; ++i) //先找cache中valid为FALSE的置换
+            ;
+        if (i == CACHE_SIZE) //cache满了，置换最后一项
+        {
+            swap = i - 1;
+            for (i = 1; i < CACHE_SIZE; ++i) //FIFO前移
+                cache[i - 1] = cache[i];
+        }
+        else //cache没满
+            swap = i;
+
+        cache[swap].valid = TRUE;
+        cache[swap].sector = sectorNumber;
+        bcopy(data, cache[swap].data, SectorSize);
+        // printf("cache miss, swap cache[%d] by %d\n", swap, sectorNumber);
+    }
+    else //找到了，直接读cache中的数据
+    {
+        // printf("cache[%d] hit\n", i);
+        bcopy(cache[i].data, data, SectorSize);
+        // disk->HandleInterrupt();
+    }
+#else //original verison
     disk->ReadRequest(sectorNumber, data);
     semaphore->P(); // wait for interrupt
+#endif
     lock->Release();
 }
 
@@ -93,6 +132,17 @@ void SynchDisk::ReadSector(int sectorNumber, char *data)
 void SynchDisk::WriteSector(int sectorNumber, char *data)
 {
     lock->Acquire(); // only one disk I/O at a time
+#ifdef CACHE
+    for (int i = 0; i < CACHE_SIZE; ++i)
+    {
+        if (cache[i].sector == sectorNumber)
+        {
+            // printf("cache[%d] is deleted\n", i);
+            cache[i].valid = FALSE;
+            break;
+        }
+    }
+#endif
     disk->WriteRequest(sectorNumber, data);
     semaphore->P(); // wait for interrupt
     lock->Release();
@@ -108,3 +158,11 @@ void SynchDisk::RequestDone()
 {
     semaphore->V();
 }
+
+#ifdef CACHE
+Cache::Cache()
+{
+    valid = FALSE;
+    sector = 0;
+}
+#endif

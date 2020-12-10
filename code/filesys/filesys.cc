@@ -90,15 +90,6 @@ FileSystem::FileSystem(bool format)
         FileHeader *mapHdr = new FileHeader;
         FileHeader *dirHdr = new FileHeader;
         
-// #ifdef PIPE//lab4 pipe
-        FileHeader *pipeHdr = new FileHeader;
-        freeMap->Mark(PipeSector);
-        ASSERT(pipeHdr->Allocate(freeMap, PipeFileSize));
-        pipeHdr->SetFileType(NORM);
-        pipeHdr->SetInodeSector(PipeSector);
-        pipeHdr->WriteBack(PipeSector);
-        pipeFile = new OpenFile(PipeSector);
-// #endif
         DEBUG('f', "Formatting the file system.\n");
 
         // First, allocate space for FileHeaders for the directory and bitmap
