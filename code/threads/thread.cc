@@ -49,6 +49,7 @@ Thread::Thread(char *threadname)
         }
     }
     name = threadname;
+
     stackTop = NULL;
     stack = NULL;
     status = JUST_CREATED;
@@ -60,8 +61,9 @@ Thread::Thread(char *threadname)
 //lab1 实现优先级抢占调度算法和时间片轮转算法
 Thread::Thread(char *threadName, int pr)
 {
-    timeSlice = 5; totalRunningTime = 10;
-    
+    timeSlice = 5;
+    totalRunningTime = 10;
+
     prio = pr;
     //遍历数组查找可分配的tID
     for (int i = 0; i < maxThreadNum; ++i)
@@ -103,13 +105,27 @@ Thread::~Thread()
 
     threadPtr[tID] = NULL;
     isAllocatable[tID] = true;
+    // printf("isAllocatable[%d] set to true, %s %d %s\n", tID, __FILE__, __LINE__,__FUNCTION__);
     threadCount--;
     // cout << "thread " << getTID() << " has been deleted by thread " << currentThread->getTID() << endl;
-    
+    space->ref--;
+    if (!space->ref)
+        for (int i = 0; i < space->numPages; i++)
+        {
+            if (space->pageTable[i].valid)
+            { // Free currentThread "used" page frame
+
+                int pageFrameNum = space->pageTable[i].physicalPage;
+                DEBUG('p', "Physical page frame: %d is freed.\n", pageFrameNum);
+                // printf("Physical page frame: %d is freed.\n", pageFrameNum);
+                machine->bitmap->Clear(space->pageTable[i].physicalPage);
+            }
+        }
+    // printf("Thread %s destroyed,in %s %d\n", name, __FILE__, __LINE__);
+
     ASSERT(this != currentThread);
     if (stack != NULL)
         DeallocBoundedArray((char *)stack, StackSize * sizeof(int));
-    
 }
 
 //----------------------------------------------------------------------
@@ -132,14 +148,13 @@ Thread::~Thread()
 //	"arg" is a single argument to be passed to the procedure.
 //----------------------------------------------------------------------
 
-
 void Thread::Fork(VoidFunctionPtr func, int arg)
 {
     DEBUG('t', "Forking thread \"%s\" with func = 0x%x, arg = %d\n",
           name, (int)func, arg);
 
     StackAllocate(func, arg);
-
+    // printf("%d %s\n", name, tID);
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     scheduler->ReadyToRun(this); // ReadyToRun assumes that interrupts
                                  // are disabled!
@@ -191,10 +206,9 @@ void Thread::Finish()
 {
     (void)interrupt->SetLevel(IntOff);
     ASSERT(this == currentThread);
-
-    // DEBUG('t', "Finishing thread \"%s\"\n", getName());lab6暂时注释
-
-    threadsToBeDestroyed_list->Append((void*)currentThread);
+    // DEBUG('t', "Finishing thread \"%s\"\n", getName());
+    isAllocatable[currentThread->getTID()] = TRUE;
+    threadsToBeDestroyed_list->Append((void *)currentThread);
     Sleep(); // invokes SWITCH
     // not reached
 }
@@ -226,7 +240,7 @@ void Thread::Yield()
 
     // DEBUG('t', "Yielding thread \"%s\"\n", getName());//lab6暂时注释
     nextThread = scheduler->FindNextToRun();
-    
+
     if (nextThread != NULL)
     {
         scheduler->ReadyToRun(this);
@@ -281,10 +295,20 @@ void Thread::Sleep()
 //	member function.
 //----------------------------------------------------------------------
 
-static void ThreadFinish() { currentThread->Finish(); }
-static void InterruptEnable() { interrupt->Enable(); }
+static void ThreadFinish() {} // currentThread->Finish(); }
+static void InterruptEnable()
+{
+    while (!threadsToBeDestroyed_list->IsEmpty())
+    {
+        Thread *tbd = (Thread *)threadsToBeDestroyed_list->Remove();
+        delete tbd;
+        tbd = NULL;
+    }
+    interrupt->Enable();
+}
 void ThreadPrint(int arg)
 {
+
     Thread *t = (Thread *)arg;
     t->Print();
 }

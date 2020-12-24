@@ -23,6 +23,7 @@ Interrupt *interrupt;        // interrupt status
 Statistics *stats;           // performance metrics
 Timer *timer;                // the hardware timer device,
                              // for invoking context switches
+//lab6 
 
 //lab4
 bool verbose = FALSE;
@@ -108,14 +109,14 @@ TimerInterruptHandler(int dummy)
 //----------------------------------------------------------------------
 void Initialize(int argc, char **argv)
 {
-#ifdef LAB1
+
     //lab1 初始化
     for (int i = 0; i < maxThreadNum; ++i)
     {
         isAllocatable[i] = true;
         threadPtr[i] = NULL;
     }
-#endif
+
     
     int argCount;
     char *debugArgs = "";

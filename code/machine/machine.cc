@@ -83,6 +83,7 @@ void bitMap::freeMem(void)
 
             int pageFrameNum = machine->pageTable[i].physicalPage;
             DEBUG('p', "Physical page frame: %d is freed.\n", pageFrameNum);
+            // printf("Physical page frame: %d is freed.\n", pageFrameNum);
             setBit(pageFrameNum, false);
         }
     }
@@ -132,7 +133,7 @@ void Machine::advancePC()
 Machine::Machine(bool debug)
 {
     //lab2 bitmap
-    bitmap = new bitMap;
+    bitmap = new BitMap(NumPhysPages);
     int i;
     tlbVisitCnt = tlbHitCnt = 0;
     for (i = 0; i < NumTotalRegs; i++)

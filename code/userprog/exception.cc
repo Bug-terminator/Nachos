@@ -94,7 +94,7 @@ int NaiveReplacement(int vpn)
 TranslationEntry
 PageMisstHandler(int vpn)
 {
-    int ppn = machine->bitmap->allocateMem();
+    int ppn = machine->bitmap->Find();
     if (ppn == -1)
     {
         ppn = NaiveReplacement(vpn);
@@ -224,8 +224,8 @@ void FileSystemHandler(int type)
         delete[] name; //回收内存
     }
     else if (type == SC_Close)
-    {                                                                      // void Close(OpenFileId id);
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);         // OpenFile object id
+    {                                                                     // void Close(OpenFileId id);
+        OpenFile *openFile = (OpenFile *)machine->ReadRegister(4);        // OpenFile object id
         cout << "Success delete file ID" << (OpenFileId)openFile << endl; // release the file
         delete openFile;
     }
@@ -285,39 +285,52 @@ void UserProgHandler(int type)
 {
     if (type == SC_Exec)
     {
+        currentThread->SaveUserState();
         int addr = machine->ReadRegister(4);
         Thread *thread = new Thread("exec_thread");
-        thread->Fork(exec_helper, addr);
         machine->WriteRegister(2, (SpaceId)thread->getTID());
+        thread->Fork(exec_helper, addr);
+        printf("spaceID = %d %s %d\n", thread->getTID(), __FILE__, __LINE__);
+        currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Fork)
     {
+        currentThread->SaveUserState();
         int funcAddr = machine->ReadRegister(4);
         // Create a new thread in the same addrspace
         Thread *thread = new Thread("fork_thread");
         thread->space = currentThread->space;
+        thread->space->ref++;
         thread->Fork(fork_helper, funcAddr);
+        currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Yield)
     {
+        currentThread->SaveUserState();
         currentThread->Yield();
+        currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Exit)
     {
+        currentThread->SaveUserState();
         int status = machine->ReadRegister(4);
         printf("%s exists with status %d.\n", currentThread->getName(), status);
-        machine->bitmap->freeMem(); //释放位图
+        currentThread->RestoreUserState();
         machine->advancePC();
         currentThread->Finish();
     }
     else if (type == SC_Join)
     {
+        currentThread->SaveUserState();
         int threadID = machine->ReadRegister(4);
-        while (!isAllocatable[threadID])
+        printf("%s start waiting %s\n",currentThread->getName(), threadPtr[threadID-1]->getName());
+        while (!isAllocatable[threadID - 1])
             currentThread->Yield();
+        printf("join wait finish\n");
+        currentThread->RestoreUserState();
         machine->advancePC();
     }
 }
@@ -342,7 +355,9 @@ void ExceptionHandler(ExceptionType which)
         }
         else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
         {
+            currentThread->SaveUserState();
             FileSystemHandler(type);
+            currentThread->RestoreUserState();
             machine->advancePC();
         }
     }
@@ -350,7 +365,7 @@ void ExceptionHandler(ExceptionType which)
     //lab2 exercise2
     else if (which = PageFaultException)
     {
-    //     ASSERT(machine->tlb); //保证tlb正确初始化
+        //     ASSERT(machine->tlb); //保证tlb正确初始化
         int badVAddr = machine->ReadRegister(BadVAddrReg);
         TLBMissHandler(badVAddr);
     }

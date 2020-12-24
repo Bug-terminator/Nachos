@@ -14,7 +14,21 @@
 
 ## 对Lab1的完善
 
-做*lab1*时因为水平不够，发现*Nachos*线程切换的一个*bug*，但是分析不出原因，也没能解决：在调用*Switch*函数之后，上处理器的线程如果是一个新线程，会调用*ThreadRoot*，而不会检查*ThreadToBeDestroyed*标记，这时候如果新线程自己调用了*finish*方法，那么原来那个*threadToBeDestroyed*标记就会被覆盖掉。要解决这个*bug*也很简单，用一个链表就行：
+做*lab1*时因为水平不够，发现*Nachos*线程切换的一个*bug*，但是分析不出原因，也没能解决：在调用*Switch*函数之后，上处理器的线程如果是一个新线程，会调用*ThreadRoot*，而不会检查*ThreadToBeDestroyed*标记，这时候如果新线程自己调用了*finish*方法，那么原来那个*threadToBeDestroyed*标记就会被覆盖掉。要解决这个*bug*，除了把*threadToBeDestroyed*换成链表之外，还需要在每个新线程上*cpu*之前，检查一下是否还有待析构的线程，这样才能及时得处理掉这个线程，这里我选择在开中断时进行检查。
+
+```cpp
+//这个函数是每个新线程上cpu之前都会执行的
+static void InterruptEnable()
+{
+    while (!threadsToBeDestroyed_list->IsEmpty())
+    {
+        Thread *tbd = (Thread *)threadsToBeDestroyed_list->Remove();
+        delete tbd;
+        tbd = NULL;
+    }
+    interrupt->Enable();
+}
+```
 
 ## 概述
 
@@ -242,7 +256,30 @@ void Close(OpenFileId id);
 2. 使用*delete*析构该*openFile*
 3. 调用*advancePC*函数自增*PC*
 
+### 思考
+
+在阅读了*xv6*源代码之后，我发现*Nachos*缺少压栈过程：对于每一个*syscall*，在执行之前，都应该将*PC*保存起来，处理完*syscall*之后也需要将*PC*恢复。所以每个系统调用的正确写法都应该在首尾分别加上如下语句，以*Write*为例：
+
 ```cpp
+else if (type == SC_Write)
+{       
+  			currentThread->SaveUserState();    //AKA压栈  
+  			...
+				currentThread->RestoreUserState(); //AKA出栈
+}
+```
+
+文件系统的5个系统调用实现如下：
+
+```cpp
+else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
+{
+    currentThread->SaveUserState();
+    FileSystemHandler(type);
+    currentThread->RestoreUserState();
+    machine->advancePC();
+}
+
 void FileSystemHandler(int type)
 {
     if (type == SC_Create)
@@ -277,44 +314,15 @@ void FileSystemHandler(int type)
     }
     else if (type == SC_Write)
     {
-        currentThread->SaveUserState();                                  
         int addr = machine->ReadRegister(4);                             
         int size = machine->ReadRegister(5);                            
         OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);       
         int numByte = openFile->Write(&machine->mainMemory[addr], size); 
         cout << "Success write " << numByte << "bytes to file ID" <<
         (OpenFileId)openFile << endl;
-        currentThread->RestoreUserState();
     }
 }
 ```
-
-### 思考
-
-在阅读了*xv6*源代码之后，我发现*Nachos*缺少压栈过程：对于每一个*syscall*，在执行之前，都应该将*PC*保存起来，处理完*syscall*之后也需要将*PC*恢复。所以每个系统调用的正确写法都应该在首尾分别加上如下语句，以*Write*为例：
-
-```cpp
-else if (type == SC_Write)
-    {       
-  			currentThread->SaveUserState();    //AKA压栈  
-  			...
-				currentThread->RestoreUserState(); //AKA出栈
-    }
-```
-
-然而在*start.s*中：
-
-```cpp
-	.globl Write
-	.ent	Write
-Write:
-	addiu $2,$0,SC_Write
-	syscall ==>PC
-	j	$31
-	.end Write
-```
-
-可以发现*syscall*处理过程中*PC*的值一直没有变过，所以，对于文件系统来说，压栈和出栈的过程可以省略，*exercise3*的结果将证明此结论的正确性。	
 
 ## *Exercise3*  编写用户程序
 
@@ -389,28 +397,6 @@ rose is a rose is a rose.
 
 > 实现如下系统调用：*Exec*，*Fork*，*Yield*，*Join*，*Exit*。*Syscall*.*h*文件中有这些系统调用基本说明。
 
-前面提到了文件系统中可以省略压栈和出栈的过程，这是*Nachos*系统的性质导致的。然而在本次*exercise*中，因为涉及到线程的切换，是不是就意味着压栈/出栈过程不可省略呢？结论是否定的，因为在*Scheduler::Run*()中会自动保存和恢复*context*，所以之前的结论在本次实验中依然成立。
-
-```cpp
-void Scheduler::Run(Thread *nextThread)
-{
-		...
-    if (currentThread->space != NULL)
-    {                                   // if this thread is a user program,
-        currentThread->SaveUserState(); // save the user's CPU registers
-        currentThread->space->SaveState();
-    }
-		...
-    SWITCH(oldThread, nextThread);
-		...
-    if (currentThread->space != NULL)
-    {                                      // if there is an address space
-        currentThread->RestoreUserState(); // to restore, do it.
-        currentThread->space->RestoreState();
-    }
-}
-```
-
 我写了一个函数*UserProgHandler*来处理用户程序系统调用:
 
  ```cpp
@@ -441,12 +427,9 @@ void StartProcess(char *filename)
     }
     space = new AddrSpace(executable);
     currentThread->space = space;
-
     delete executable; // close file
-
     space->InitRegisters(); // set the initial register values
     space->RestoreState();  // load page table register
-
     machine->Run(); // jump to the user progam
     ASSERT(FALSE);  // machine->Run never returns;
                     // the address space exits
@@ -461,7 +444,7 @@ void StartProcess(char *filename)
 typedef int SpaceId;	
 ```
 
-注释里给出的定义为“每个用户程序的一个”独特的标识符”，这个标识符可以是*space*的地址，也可以是*thread*的地址，甚至可以是*thread*的*ID*（*lab1*），我认为三者都可以，因为它们都是对*thread*的唯一描述，并且”同生（构造时）同死（析构时）“，我选用*threadID*的来实现, 因为*Nachos*的*Finish*函数有*BUG*，可能会导致*threadToBeDestroyed*指针不被释放，这点在*lab1*中有详细论述。	
+注释里给出的定义为“每个用户程序的一个”独特的标识符”，这个标识符也可以是*thread*的地址也可以是*thread*的*ID*（*lab1*），我认为两者都可以，因为它们都是对*thread*的唯一描述，并且”同生（构造时）同死（析构时）“，我选用*threadID*的来实现。
 
 ### *Fork*()
 
@@ -470,10 +453,11 @@ void Fork(void (*func)());
 ```
 
 1. 获取函数在*Nachos*内存中的地址
-2. *new*一个线程，并*Fork*辅助函数*fork_helper*
-3. 在辅助函数中，对新线程的寄存器和页表初始化
-4. 调用*Machine::Run*()开始执行
-5. *PC*自增
+2. *new*一个线程，将它的*space*指向父线程的*space*，并将引用计数加一；
+3. *Fork*辅助函数*fork_helper*
+4. 在辅助函数中，对新线程的寄存器和页表初始化
+5. 调用*Machine::Run*()开始执行
+6. *PC*自增
 
 ### *Yield*()
 
@@ -504,6 +488,7 @@ void Exit(int status);
 2. 释放内存中与*currentThread*有关的位图中的位
 3. *PC*自增
 4. 调用*currentThread->Finish*()函数结束运行
+5. 在析构线程时需要将*space*的引用计数减一，并判断是否为*0*，如果是*0*才释放相应的内存。
 
 ```cpp
 //----------------------------------------------------------------------
@@ -514,39 +499,52 @@ void UserProgHandler(int type)
 {
     if (type == SC_Exec)
     {
+        currentThread->SaveUserState();
         int addr = machine->ReadRegister(4);
         Thread *thread = new Thread("exec_thread");
-        thread->Fork(exec_func, addr);
         machine->WriteRegister(2, (SpaceId)thread->getTID());
+        thread->Fork(exec_helper, addr);
+        printf("spaceID = %d %s %d\n", thread->getTID(), __FILE__, __LINE__);
+        currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Fork)
     {
+        currentThread->SaveUserState();
         int funcAddr = machine->ReadRegister(4);
         // Create a new thread in the same addrspace
         Thread *thread = new Thread("fork_thread");
         thread->space = currentThread->space;
-        thread->Fork(fork_func, funcAddr);
+        thread->space->ref++;
+        thread->Fork(fork_helper, funcAddr);
+        currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Yield)
     {
+        currentThread->SaveUserState();
         currentThread->Yield();
+        currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Exit)
     {
+        currentThread->SaveUserState();
         int status = machine->ReadRegister(4);
-        printf("%s exist with status %d.\n", currentThread->getName(), status);
-        machine->bitmap->freeMem(); //释放位图
+        printf("%s exists with status %d.\n", currentThread->getName(), status);
+        currentThread->RestoreUserState();
         machine->advancePC();
         currentThread->Finish();
     }
     else if (type == SC_Join)
     {
+        currentThread->SaveUserState();
         int threadID = machine->ReadRegister(4);
-        while (!isAllocatable[threadID])
+        printf("%s start waiting %s\n",currentThread->getName(), threadPtr[threadID-1]->getName());
+        while (!isAllocatable[threadID - 1])
             currentThread->Yield();
+        printf("join wait finish\n");
+        currentThread->RestoreUserState();
         machine->advancePC();
     }
 }
@@ -562,7 +560,7 @@ void exec_helper(int addr) //mainMemory start positon
     OpenFile *executable = fileSystem->Open(name);
     AddrSpace *space = new AddrSpace(executable);
     currentThread->space = space;
-    delete[] name; //回收内存
+    delete[] name; 
     delete executable;
     space->InitRegisters();
     space->RestoreState();
@@ -574,7 +572,6 @@ void fork_func(int arg)
 {
     currentThread->space->InitRegisters(); //初始化寄存器
     currentThread->space->RestoreState();  //继承父进程的页表
-    // Set PC to *arg*
     machine->WriteRegister(PCReg, arg); //从函数处开始执行
     machine->WriteRegister(NextPCReg, arg + 4);
     machine->Run();
@@ -592,7 +589,7 @@ void fork_func(int arg)
 
 ```cpp
 #include "syscall.h"
-int spaceID;
+int spaceID, i;
 void func()
 {
     Create("text1");
@@ -604,6 +601,7 @@ int main()
     Fork(func);
     Yield();
     spaceID = Exec("../test/file_syscall_test");
+    Join(spaceID);
     Exit(0);
 }
 ```
@@ -611,41 +609,40 @@ int main()
 这个函数的流程是：
 
 1. 主函数先*fork*一个线程，它将创造一个名为*text1*的文件；
-2. 主函数让出*CPU*，让这个*fork*线程先执行完毕，正常退出；
+2. 主函数调用*Yield*让出*CPU*，等这个*fork*线程先执行完毕；
 3. 然后主函数调用*Exec*执行*exercise2*中使用的测试文件*file_syscall_test*;
-4. 主函数正常退出；
-5. *exercise2*的测试程序正常退出。
+4. *main*函调用*join*等待*exec_thread*执行完毕；
+5. *exec_thread*退出；
+6. *main*退出。
 
-本测试*cover*了*Exit/Fork/Yield/Exec*四个系统调用，测试结果如下：
+本测试*cover*所有5个线程系统调用，测试结果如下：
 
 ```cpp
 vagrant@precise32:/vagrant/nachos/nachos-3.4/code/code/userprog$ ./nachos -d t -x ../test/user_prog_test
-Forking thread "fork_thread" with func = 0x804f5ac, arg = 208
+Forking thread "fork_thread" with func = 0x804fa69, arg = 208
 Switching from thread "main" to thread "fork_thread"
 Success create file name text1
 fork_thread exists with status 0.
 Switching from thread "fork_thread" to thread "main"
-Forking thread "exec_thread" with func = 0x804f4c5, arg = 360
-main exists with status 0.
+Forking thread "exec_thread" with func = 0x804f971, arg = 376
+main start waiting exec_thread
 Switching from thread "main" to thread "exec_thread"
 Success create file name file2
 Success open file name file1
 Success open file name file2
-Success read 25bytes from file ID 147248656
-Success write 25bytes to file ID147248672
-Success delete file ID 147248656
-Success delete file ID 147248672
+Success read 25bytes from file ID161588768
+Success write 25bytes to file ID161588784
+Success delete file ID161588768
+Success delete file ID161588784
 exec_thread exists with status 0.
-No threads ready or runnable, and no pending interrupts.
-Assuming the program completed.
-Machine halting!
+Switching from thread "exec_thread" to thread "main"
+join wait finish
+main exists with status 0.
 ```
 
 ### 结论
 
-结果显示，主函数先*fork*一个线程，让出*CPU*；这个线程创造了一个名为*text1*的文件，正常退出；然后主函数调用*Exec*执行*exercise2*中使用的测试文件*file_syscall_test*，主函数正常退出，最终，*exercise2*的测试程序正常退出。
-
-符合预期，实验成功。
+结果显示，执行流程为*fork_thread->main->exec_thread->main*，符合实际，实验成功。
 
 ## 困难&解决
 

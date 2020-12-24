@@ -1,5 +1,5 @@
 #include "syscall.h"
-int spaceID;
+int spaceID, i;
 void func()
 {
     Create("text1");
@@ -11,6 +11,6 @@ int main()
     Fork(func);
     Yield();
     spaceID = Exec("../test/file_syscall_test");
-    // Join(spaceID);
+    Join(spaceID);
     Exit(0);
 }
