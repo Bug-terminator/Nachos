@@ -194,7 +194,7 @@ void Thread::Finish()
 
     // DEBUG('t', "Finishing thread \"%s\"\n", getName());lab6暂时注释
 
-    threadToBeDestroyed = currentThread;
+    threadsToBeDestroyed_list->Append((void*)currentThread);
     Sleep(); // invokes SWITCH
     // not reached
 }

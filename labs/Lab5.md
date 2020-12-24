@@ -12,6 +12,10 @@
 | *Exercise4* | *Y*  |
 | *Exercise5* | *Y*  |
 
+## 对Lab1的完善
+
+做*lab1*时因为水平不够，发现*Nachos*线程切换的一个*bug*，但是分析不出原因，也没能解决：在调用*Switch*函数之后，上处理器的线程如果是一个新线程，会调用*ThreadRoot*，而不会检查*ThreadToBeDestroyed*标记，这时候如果新线程自己调用了*finish*方法，那么原来那个*threadToBeDestroyed*标记就会被覆盖掉。要解决这个*bug*也很简单，用一个链表就行：
+
 ## 概述
 
 本实习希望通过修改*Nachos*系统的底层源代码，达到“实现系统调用”的目标。

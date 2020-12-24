@@ -17,7 +17,7 @@ char *transEnum[threadStatusNum] = {"JUST_CREATED", "RUNNING", "READY", "BLOCKED
 // These are all initialized and de-allocated by this file.
 
 Thread *currentThread;       // the thread we are running now
-Thread *threadToBeDestroyed; // the thread that just finished
+List *threadsToBeDestroyed_list; // the thread that just finished
 Scheduler *scheduler;        // the ready list
 Interrupt *interrupt;        // interrupt status
 Statistics *stats;           // performance metrics
@@ -184,7 +184,7 @@ void Initialize(int argc, char **argv)
     if (randomYield)             // start the timer (if needed)//lab3 不使用时间片轮转
         timer = new Timer(TimerInterruptHandler, 0, randomYield);
 
-    threadToBeDestroyed = NULL;
+    threadsToBeDestroyed_list = new List();
 
     // We didn't explicitly allocate the current thread we are running in.
     // But if it ever tries to give up the CPU, we better have a Thread
