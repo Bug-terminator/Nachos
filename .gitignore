@@ -1,5 +1,5 @@
-labs
-.vscode
-*.o
-*.coff
-*.noff
+labs/
+.vscode/
+**/*.o
+**/*.coff
+**/*.noff

@@ -30,7 +30,8 @@
 #define SC_Close 8
 #define SC_Fork 9
 #define SC_Yield 10
-#define SC_Yield 10
+#define SC_Cmd 11
+
 
 #ifndef IN_ASM
 
@@ -89,6 +90,8 @@ typedef int OpenFileId;
 /* Create a Nachos file, with "name" */
 void Create(char *name);
 
+
+
 /* Open the Nachos file "name", and return an "OpenFileId" that can 
  * be used to read and write to the file.
  */
@@ -121,7 +124,8 @@ void Fork(void (*func)());
  * or not. 
  */
 void Yield();
-
+//
+void Cmd(char *cmd);
 #endif /* IN_ASM */
 
 #endif /* SYSCALL_H */

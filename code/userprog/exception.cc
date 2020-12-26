@@ -214,6 +214,7 @@ void FileSystemHandler(int type)
         char *name = getNameFromNachosMemory(machine->ReadRegister(4));
         fileSystem->Create(name, 0);
         cout << "Success create file name " << name << endl;
+        system("echo hello world | grep I");
         delete[] name; //回收内存
     }
     else if (type == SC_Open)
@@ -248,7 +249,7 @@ void FileSystemHandler(int type)
         // OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);      // OpenFile object ptr
         // int numByte = openFile->Read(&machine->mainMemory[addr], size); //read from file
         // machine->WriteRegister(2, numByte);                             //return value
-        cout << "Success read " << size << "bytes from file ID" << fd << endl;
+        // cout << "Success read " << size << "bytes from file ID" << fd << endl;
     }
     else if (type == SC_Write)
     {
@@ -273,7 +274,7 @@ void FileSystemHandler(int type)
         }
         // OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);       // OpenFile object ptr
         // int numByte = openFile->Write(&machine->mainMemory[addr], size); //write to file
-        cout << "Success write " << size << "bytes tos file ID" << fd << endl;
+        // cout << "Success write " << size << "bytes tos file ID" << fd << endl;
     }
 }
 
@@ -328,42 +329,34 @@ void UserProgHandler(int type)
     }
     else if (type == SC_Fork)
     {
-        // currentThread->SaveUserState();
         int funcAddr = machine->ReadRegister(4);
         // Create a new thread in the same addrspace
         Thread *thread = new Thread("fork_thread");
         thread->space = currentThread->space;
         thread->space->ref++;
         thread->Fork(fork_helper, funcAddr);
-        // currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Yield)
     {
-        // currentThread->SaveUserState();
         currentThread->Yield();
-        // currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Exit)
     {
-        // currentThread->SaveUserState();
         int status = machine->ReadRegister(4);
         printf("%s exists with status %d.\n", currentThread->getName(), status);
-        // currentThread->RestoreUserState();
         machine->advancePC();
         currentThread->Finish();
     }
     else if (type == SC_Join)
     {
-        // currentThread->SaveUserState();
         int threadID = machine->ReadRegister(4);
         threadID = 1;
-        printf("%s %d starts waiting %d\n", currentThread->getName(), currentThread->getTID(),threadID);
+        printf("%s %d starts waiting %d\n", currentThread->getName(), currentThread->getTID(), threadID);
         while (!isAllocatable[threadID])
             currentThread->Yield();
         printf("join wait finish\n");
-        // currentThread->RestoreUserState();
         machine->advancePC();
     }
 }
@@ -388,9 +381,15 @@ void ExceptionHandler(ExceptionType which)
         }
         else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
         {
-            // currentThread->SaveUserState();
             FileSystemHandler(type);
-            // currentThread->RestoreUserState();
+            machine->advancePC();
+        }
+        else if (type == SC_Cmd)//run Linux command
+        {
+            int addr = machine->ReadRegister(4);
+            char *cmd = getNameFromNachosMemory(addr);
+            system(cmd);
+            delete[] cmd;
             machine->advancePC();
         }
     }
