@@ -697,11 +697,30 @@ char *name = new char[FileNameMaxLength + 1];
 delete[] name;
 ```
 
+### Segmentation Fault
+
+写完之后我发现一个很魔幻的问题，*exception.cc*原本好好的，但是我只要随意改动一处，比如打个空格或者回车，再次编译就会报错。
+
+打开*gdb*，运行，输入*bt*查看函数栈：
+
+```shell
+(gdb) bt
+#0  0x0804fffd in OpenFile::Read (this=0x5, into=0x805b498 "", numBytes=40) at ../filesys/openfile.h:44
+#1  0x0804f826 in FileSystemHandler (type=6) at ../userprog/exception.cc:237
+#2  0x0804febf in ExceptionHandler (which=SyscallException) at ../userprog/exception.cc:358
+#3  0x08050fad in Machine::RaiseException (this=0x805b1e8, which=SyscallException, badVAddr=0)
+    at ../machine/machine.cc:188
+#4  0x0805299e in Machine::OneInstruction (this=0x805b1e8, instr=0x8062538) at ../machine/mipssim.cc:535
+#5  0x08051460 in Machine::Run (this=0x805b1e8) at ../machine/mipssim.cc:40
+#6  0x0804fa11 in exec_helper (addr=376) at ../userprog/exception.cc:267
+#7  0x080534ec in ThreadRoot ()
+```
+
+可以发现问题出在*read*上。可是为什么加上回车就会出错呢？我又回去检查了我的代码，没发现任何错误，我陷入了困境。“重写吧”，我又重新写了一遍*read*系统调用，解决了问题，原因尚不明。
+
 ## 收获&感想
 
-本次lab的难度文件系统相比还是比较简单的，最关键的就是搞清楚每个变量到底是在*Nachos*内存，还是在宿主主机内存。这关系到是使用辅助函数还是直接使用强制类型转换。
-
-
+本次*lab*的难度文件系统相比还是比较简单的，最关键的就是搞清楚每个变量到底是在*Nachos*内存，还是在宿主主机内存。这关系到是使用辅助函数还是直接使用强制类型转换。最困难的应该就是*Join*，因为*Nachos*的*Finish*方法的*bug*，导致不得不使用链表，并且在新线程上*cpu*之前，需要及时得把链表清空。这样才能让*Join*退出循环。
 
 ## 参考文献
 

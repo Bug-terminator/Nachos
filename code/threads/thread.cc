@@ -117,11 +117,11 @@ Thread::~Thread()
 
                 int pageFrameNum = space->pageTable[i].physicalPage;
                 DEBUG('p', "Physical page frame: %d is freed.\n", pageFrameNum);
-                // printf("Physical page frame: %d is freed.\n", pageFrameNum);
+                printf("%s: Physical page frame: %d is freed.\n",name, pageFrameNum);
                 machine->bitmap->Clear(space->pageTable[i].physicalPage);
             }
         }
-    // printf("Thread %s destroyed,in %s %d\n", name, __FILE__, __LINE__);
+    printf("Thread %s destroyed,in %s %d\n", name, __FILE__, __LINE__);
 
     ASSERT(this != currentThread);
     if (stack != NULL)
@@ -207,7 +207,6 @@ void Thread::Finish()
     (void)interrupt->SetLevel(IntOff);
     ASSERT(this == currentThread);
     // DEBUG('t', "Finishing thread \"%s\"\n", getName());
-    isAllocatable[currentThread->getTID()] = TRUE;
     threadsToBeDestroyed_list->Append((void *)currentThread);
     Sleep(); // invokes SWITCH
     // not reached

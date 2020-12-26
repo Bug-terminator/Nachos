@@ -100,13 +100,13 @@ AddrSpace::AddrSpace(OpenFile *executable)
                                        // a separate page, we could set its
                                        // pages to be read-only
     }
-    // printf("allocation finish:\n");
-    // machine->bitmap->Print();
+    printf("allocation finish:\n");
+    machine->bitmap->Print();
     // zero out the entire address space, to zero the unitialized data segment
     // and the stack segment
 
     //lab2 注释
-    // bzero(machine->mainMemory, size);
+    bzero(machine->mainMemory, size);
 
     // then, copy in the code and data segments into memory
     if (noffH.code.size > 0)

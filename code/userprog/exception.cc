@@ -189,7 +189,7 @@ void TLBMissHandler(int virtAddr)
 // 	Handling file system related system call.
 //----------------------------------------------------------------------
 #ifndef FileNameMaxLength
-#define FileNameMaxLength 20 // originally define in filesys/directory.h，changed in lab4
+#define FileNameMaxLength 40 // originally define in filesys/directory.h，changed in lab4
 #endif
 
 // Helper function to get file name using ReadMem for Create and Open syscall
@@ -230,23 +230,50 @@ void FileSystemHandler(int type)
         delete openFile;
     }
     else if (type == SC_Read)
-    {                                                                   // int Read(char *buffer, int size, OpenFileId id);
-        int addr = machine->ReadRegister(4);                            // memory starting position
-        int size = machine->ReadRegister(5);                            // read "size" bytes
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);      // OpenFile object ptr
-        int numByte = openFile->Read(&machine->mainMemory[addr], size); //read from file
-        machine->WriteRegister(2, numByte);                             //return value
-        cout << "Success read " << numByte << "bytes from file ID" << (OpenFileId)openFile << endl;
+    {                                        // int Read(char *buffer, int size, OpenFileId id);
+        int addr = machine->ReadRegister(4); // memory starting position
+        int size = machine->ReadRegister(5); // read "size" bytes
+        int fd = machine->ReadRegister(6);
+        OpenFile *openFile = (OpenFile *)fd;
+        int result = 0;
+        char buffer[size];
+        if (fd == 0)
+            for (int i = 0; i < size; ++i)
+                buffer[i] = getchar();
+        else
+            result = openFile->Read(buffer, size);
+        for (int i = 0; i < size; ++i)
+            machine->WriteMem(addr + i, 1, int(buffer[i]));
+        machine->WriteRegister(2, result);
+        // OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);      // OpenFile object ptr
+        // int numByte = openFile->Read(&machine->mainMemory[addr], size); //read from file
+        // machine->WriteRegister(2, numByte);                             //return value
+        cout << "Success read " << size << "bytes from file ID" << fd << endl;
     }
     else if (type == SC_Write)
     {
-        currentThread->SaveUserState();                                  // void Write(char *buffer, int size, OpenFileId id);
-        int addr = machine->ReadRegister(4);                             // memory starting position
-        int size = machine->ReadRegister(5);                             // read "size" bytes
-        OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);       // OpenFile object ptr
-        int numByte = openFile->Write(&machine->mainMemory[addr], size); //write to file
-        cout << "Success write " << numByte << "bytes to file ID" << (OpenFileId)openFile << endl;
-        currentThread->RestoreUserState();
+        // void Write(char *buffer, int size, OpenFileId id);
+        int addr = machine->ReadRegister(4); // memory starting position
+        int size = machine->ReadRegister(5); // read "size" bytes
+        int fd = machine->ReadRegister(6);
+        char buffer[size];
+        int data;
+        for (int i = 0; i < size; ++i)
+        {
+            machine->ReadMem(addr + i, 1, &data);
+            buffer[i] = char(data);
+        }
+        if (fd == 1)
+            for (int i = 0; i < size; ++i)
+                putchar(buffer[i]);
+        else
+        {
+            OpenFile *openFile = (OpenFile *)fd;
+            openFile->Write(buffer, size);
+        }
+        // OpenFile *openFile = (OpenFile *)machine->ReadRegister(6);       // OpenFile object ptr
+        // int numByte = openFile->Write(&machine->mainMemory[addr], size); //write to file
+        cout << "Success write " << size << "bytes tos file ID" << fd << endl;
     }
 }
 
@@ -259,6 +286,11 @@ void exec_helper(int addr) //mainMemory start positon
 {
     char *name = getNameFromNachosMemory(addr);
     OpenFile *executable = fileSystem->Open(name);
+    if (!executable)
+    {
+        printf("Exec Error.\n");
+        return;
+    }
     AddrSpace *space = new AddrSpace(executable);
     currentThread->space = space;
     delete[] name;
@@ -285,52 +317,53 @@ void UserProgHandler(int type)
 {
     if (type == SC_Exec)
     {
-        currentThread->SaveUserState();
+        // currentThread->SaveUserState();
         int addr = machine->ReadRegister(4);
         Thread *thread = new Thread("exec_thread");
         machine->WriteRegister(2, (SpaceId)thread->getTID());
         thread->Fork(exec_helper, addr);
-        printf("spaceID = %d %s %d\n", thread->getTID(), __FILE__, __LINE__);
-        currentThread->RestoreUserState();
+        printf("%s,spaceID = %d %s %d\n",thread->getName(), thread->getTID(), __FILE__, __LINE__);
+        // currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Fork)
     {
-        currentThread->SaveUserState();
+        // currentThread->SaveUserState();
         int funcAddr = machine->ReadRegister(4);
         // Create a new thread in the same addrspace
         Thread *thread = new Thread("fork_thread");
         thread->space = currentThread->space;
         thread->space->ref++;
         thread->Fork(fork_helper, funcAddr);
-        currentThread->RestoreUserState();
+        // currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Yield)
     {
-        currentThread->SaveUserState();
+        // currentThread->SaveUserState();
         currentThread->Yield();
-        currentThread->RestoreUserState();
+        // currentThread->RestoreUserState();
         machine->advancePC();
     }
     else if (type == SC_Exit)
     {
-        currentThread->SaveUserState();
+        // currentThread->SaveUserState();
         int status = machine->ReadRegister(4);
         printf("%s exists with status %d.\n", currentThread->getName(), status);
-        currentThread->RestoreUserState();
+        // currentThread->RestoreUserState();
         machine->advancePC();
         currentThread->Finish();
     }
     else if (type == SC_Join)
     {
-        currentThread->SaveUserState();
+        // currentThread->SaveUserState();
         int threadID = machine->ReadRegister(4);
-        printf("%s start waiting %s\n",currentThread->getName(), threadPtr[threadID-1]->getName());
-        while (!isAllocatable[threadID - 1])
+        threadID = 1;
+        printf("%s %d starts waiting %d\n", currentThread->getName(), currentThread->getTID(),threadID);
+        while (!isAllocatable[threadID])
             currentThread->Yield();
         printf("join wait finish\n");
-        currentThread->RestoreUserState();
+        // currentThread->RestoreUserState();
         machine->advancePC();
     }
 }
@@ -355,9 +388,9 @@ void ExceptionHandler(ExceptionType which)
         }
         else if (type == SC_Create || type == SC_Open || type == SC_Write || type == SC_Read || type == SC_Close)
         {
-            currentThread->SaveUserState();
+            // currentThread->SaveUserState();
             FileSystemHandler(type);
-            currentThread->RestoreUserState();
+            // currentThread->RestoreUserState();
             machine->advancePC();
         }
     }
