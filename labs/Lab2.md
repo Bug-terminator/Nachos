@@ -2,20 +2,19 @@
 
 ## 任务完成情况
 
-|  Exercise  | Y/N  |
-| :--------: | :--: |
-| Exercise1  |  Y   |
-| Exercise2  |  Y   |
-| Exercise3  |  Y   |
-| Exercise4  |  Y   |
-| Exercise5  |  Y   |
-| Exercise6  |  Y   |
-| Exercise7  |  Y   |
-| *challenge |  Y   |
+| *Exercise*  | Y/N  |
+| :---------: | :--: |
+| *Exercise1* |  Y   |
+| *Exercise2* |  Y   |
+| *Exercise3* |  Y   |
+| *Exercise4* |  Y   |
+| *Exercise5* |  Y   |
+| *Exercise6* |  Y   |
+| *Exercise7* |  Y   |
 
 
 
-## Exercise 1 源代码阅读
+## *Exercise1* 源代码阅读
 
 ### 一些值得注意的细节
 
@@ -94,7 +93,7 @@ machine.h中定义了一组与Nachos模拟寄存器和内存有关的参数，�
 
 定义了异常处理函数ExceptionHandler，用来对相应的异常(系统调用，地址越界，算数结果溢出等）做出处理。nachos对于异常或者系统调用的处理过程是：调用machine->raiseException函数，该函数得到异常类型和发生错误的虚拟地址，然后将发生错误的虚拟地址存入BadVAddrReg寄存器，然后调用DelayedLoad函数来结束当前运行中的所有东西，之后设置系统状态为内核态，然后调用ExceptionHandler函数进行异常处理，处理完异常之后重新将系统设置为用户态。
 
-## Exercise 2 TLB MISS异常处理
+## *Exercise2* TLB MISS异常处理
 
 要使用tlb，需要在`userprog/MakeFile`中添加`-DUSE_TLB`。
 
@@ -198,7 +197,7 @@ void ExceptionHandler(ExceptionType which)
 }
 ```
 
-## Exercise 3 置换算法
+## *Exercise3* 置换算法
 
 ### 准备工作
 
@@ -512,7 +511,7 @@ Cleaning up...
 
 LRU算法的命中率高于FIFO算法，换言之，LRU的缺页率略微低于FIFO算法。理论上，二者的差距应该很大，但是在实际的测试结果中显示，二者的差距只有百分之一，这是因为99table空间局部性很强，经常访问的页面就是这么几个，所以二者的差距拉不开。我们需要更大的程序来论证我们的观点，比如matmult（完成Exercise 7之后进行）。
 
-## Exercise4 内存全局管理数据结构
+## *Exercise4* 内存全局管理数据结构
 
 ### 位图bitMap
 
@@ -787,7 +786,7 @@ Cleaning up...
 
 > 其实Nachos在code/userprog/bitmap.h(cc)中已经实现了BitMap，如果以后有扩展物理内存的需求，以至于当前的unsigned int类型无法满足需求时，应该切换为Nachos自带的bitmap。
 
-## Exercise 5
+## *Exercise5*
 
 ### 线程切换和用户程序切换的关系
 
@@ -966,7 +965,7 @@ Cleaning up...
 
 成功实现多线程。
 
-## Exercise 6 缺页中断
+## *Exercise6* 缺页中断
 
 缺页时需要从硬盘读取页，Nachos没有对disk进行模拟，所以我用文件代替。
 
@@ -1027,7 +1026,7 @@ PageMissHandler(int vpn)
 }
 ```
 
-## exercise 7 Lazy-loading
+## *Exercise7* *Lazy*-*loading*
 
 ### 朴素页面置换算法Naive page replacement
 
@@ -1095,27 +1094,6 @@ Ticks: total 28, idle 0, system 10, user 18
 ### 结论
 
 一开始没有页面加载进入内存，之后每需要一页就加载进入内存，成功实现了请求分页。
-
-## *challenge2 倒排页表
-
-因为challenge2要实现一个倒排页表，如果最后做的话前面做的都得重写，所以这里我先实现了challenge2，之后的所有exercise也都将**基于倒排页表**。所谓倒排页表，就是与页表相反，为所有物理地址维护一张页表，其大小等于物理地址空间，页表项包括虚拟地址，所属线程ID和一些标志位。一般来说虚拟地址空间是远大于物理地址空间的，因此为每个用户线程维护一个页表的空间开销将远远大于倒排页表。
-
-倒排页表的优点显而易见：可以大大减少页表的空间开销；但是它也有缺点：会导致更长的查询时间（要查询某页是否在内存，每次都需要遍历整个倒排页表，时间复杂度O(n)，而页表的查询时间为O(1)）。并且它会导致进程间的内存共享更加困难。好在Nachos的物理空间很小，只有32页，所以使用倒排页表导致的额外时间开销很小，甚至可以忽略不计。
-
-在translation.h中新增invertedPageTableEntry类，其成员变量和描述如下表：
-
-|    成员变量/函数    |                       描述                        |
-| :-----------------: | :-----------------------------------------------: |
-|       int vpn       |                    虚拟页号vpn                    |
-|       int tID       |                    所属线程ID                     |
-|     bool valid      |            合法位(页面在内存中为True)             |
-|    bool readOnly    |                      只读位                       |
-|     bool dirty      |           脏位(当某页被修改时置为true)            |
-| int lastVisitedTime | 上次被访问的时间（为后面的LRU页面置换算法做准备） |
-|      构造函数       |                 使用默认构造函数                  |
-|   void recycle()    |        回收某页，将所有成员变量置为0/false        |
-
-在machine.cc中定义一个大小为NumPhysPages的iPageTable(`invertedPageTableEntry *iPageTable = new invertedPageTableEntry[NumPhysPages]`)至此，倒排页表已经实现了。
 
 ## 感想&收获
 
