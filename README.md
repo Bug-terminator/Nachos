@@ -8,5 +8,5 @@
 | lab3 | [同步机制](labs/Synchronize/README.md)   | 信号量，锁，条件变量，读写锁      |
 | lab4 | [文件系统](labs/FileSystem/README.md)    | 多级索引，多级目录，管道，*Cache* |
 | lab5 | [系统调用](labs/Syscall/README.md)       | 实现系统调用                      |
-| lab6 | [Shell实现](labs/Shell/README.md)        | 实现自己的Shell                   |
-| lab7 | [通信机制](labs/IPC/README.md)           | 实现通信机制                      |
+
+
