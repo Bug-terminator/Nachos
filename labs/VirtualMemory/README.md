@@ -999,7 +999,7 @@ TLBMissHandler(int virtAddr)
 
 - 通过bitmap成员函数allocateMem()来分配mainMemory中的空闲页
 - 从硬盘中加载对应页面到mainMemory中
-  - 如果mainMemory满了，将调用页面置换算法，这里使用FIFO算法（我将在Exercise 7 中详细说明）
+  - 如果mainMemory满了，将调用页面置换算法，这里使用朴素页面置换算法。
 
 ```cpp
 TranslationEntry
